@@ -55,6 +55,7 @@ extern fpkind ** dqdz;
 extern fpkind ** tCell; //temperature on cells
 extern fpkind ** res; //residual for ns equations
 extern fpkind ** resOrg; //store the original res for repeat computing
+extern fpkind ** resAVX; //residual for ns equations by AVX512
 extern fpkind ** flux; //flux for 5 unkonwns rho, u, v, w, p on faces.
 extern fpkind ** qNode; //qNS on nodes 
 extern fpkind * limit; //limit on faces 

@@ -9,7 +9,7 @@ void runLoadFlux(){
 	preProcessLoadFlux();
 	int localStart, localEnd;
 	int loopID;
-	int LOOPNUM = 100; //define the local LOOPNUM
+	int LOOPNUM = 1; //define the local LOOPNUM
 	for (loopID = 0; loopID < LOOPNUM; loopID++){
 		localStart = 0;
 	    	do

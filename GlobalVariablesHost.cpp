@@ -53,6 +53,7 @@ fpkind ** dqdz;
 fpkind ** tCell; //temperature on cells
 fpkind ** res; //residual for ns equations
 fpkind ** resOrg;
+fpkind ** resAVX; //residual by AVX512
 fpkind ** flux; //flux for 5 unkonwns rho, u, v, w, p on faces.
 fpkind ** qNode;
 fpkind ** tNode;
@@ -983,15 +984,19 @@ void mallocRes(){
 	int nEquation = nl + nchem;
 	res = (fpkind **)malloc(sizeof(fpkind *) * nEquation);
 	res[0] = (fpkind *)malloc(sizeof(fpkind) * nEquation * nTotal);
+	resAVX = (fpkind **)malloc(sizeof(fpkind *) * nEquation);
+	resAVX[0] = (fpkind *)malloc(sizeof(fpkind) * nEquation * nTotal);
 	int equationID;
 	for (equationID = 1; equationID < nEquation; equationID++){
 		res[equationID] = &res[equationID-1][nTotal];
+		resAVX[equationID] = &resAVX[equationID-1][nTotal];
 	}
 	//Initialize res
 	int cellID;
 	for (equationID = 0; equationID < nEquation; equationID++){
 		for (cellID = 0; cellID < nTotal; cellID++){
 			res[equationID][cellID] = 0.0;
+			resAVX[equationID][cellID] = 0.0;
 		}
 	}
 	
@@ -1008,6 +1013,7 @@ void setResRandom(){
 	for (equationID = 0; equationID < nEquation; equationID++){
 		for (cellID = 0; cellID < nTotal; cellID++){
 			res[equationID][cellID] = fpkind(RANDOMNUMBER(-3.0, 5.0, nTotal));
+			resAVX[equationID][cellID] = res[equationID][cellID];
 		}
 	}
 }
