@@ -1210,7 +1210,7 @@ void faceColor(){
 		}
 	}
 
-	//color conflict faces
+	//color conflict faces on boundary
 
 	int colorMax = 0;
 	BoundFaceGroup = (int *)malloc(nBoundFace*sizeof(int));
@@ -1272,5 +1272,65 @@ void faceColor(){
 		int colorPosi = BoundFaceGroupPosi[color] + BoundFaceColorOffset[color];
 		BoundFaceGroup[colorPosi] = i;
 		BoundFaceColorOffset[color]++;
+	}
+
+	//color conflict faces in interior
+	colorMax = 0; //reset colorMax for interior faces
+	for (int i = 0; i < nTotalFace; i++) {
+		faceColor[i] = -1; 
+	}
+
+	for (int i = nBoundFace; i < nTotalFace; i++) {
+		int color = 0;
+		int colorSame = 0;
+		int localFace = i - nBoundFace;
+		while (faceColor[i] == -1) {
+			for (int j = 0; j < InteriorFaceConflictNum[localFace]; j++) {
+				int faceConflict = InteriorFaceConflict[InteriorFaceConflictPosi[localFace]+j];
+				if (color == faceColor[faceConflict]) {
+					colorSame = 1;
+					break;				
+				}
+			}
+			if (colorSame == 0) faceColor[i] = color;
+			else {
+				color ++;
+				colorSame = 0;
+			}
+		}
+		//record the maximum color
+		if (faceColor[i] > colorMax) colorMax = faceColor[i];
+	}
+	InteriorFaceColorNum = colorMax + 1;
+	printf("The interior faces own %d colors\n", InteriorFaceColorNum);
+	InteriorFaceGroupNum = (int*)malloc(InteriorFaceColorNum*sizeof(int));
+	InteriorFaceGroupPosi = (int*)malloc(InteriorFaceColorNum*sizeof(int));
+	int * InteriorFaceColorOffset = (int*)malloc(InteriorFaceColorNum*sizeof(int));
+	InteriorFaceGroupPosi[0] = 0;
+
+	for (int i = 0; i < InteriorFaceColorNum; i++){
+		//Initializaiton with zero
+		InteriorFaceGroupNum[i] = 0;
+		InteriorFaceColorOffset[i] = 0;
+	}
+
+	for (int i = nBoundFace; i < nTotalFace; i++) {
+		int color = faceColor[i];
+		InteriorFaceGroupNum[color] ++;
+	}
+
+	for (int i = 1; i < InteriorFaceColorNum; i++) {
+		InteriorFaceGroupPosi[i] = InteriorFaceGroupPosi[i-1] + InteriorFaceGroupNum[i-1];
+	}
+	for (int i = 0; i < InteriorFaceColorNum; i++){
+		//Initializaiton with zero
+		InteriorFaceColorOffset[i] = 0;
+	}
+
+	for (int i = nBoundFace; i < nTotalFace; i++) {
+		int color = faceColor[i];
+		int colorPosi = InteriorFaceGroupPosi[color] + InteriorFaceColorOffset[color];
+		InteriorFaceGroup[colorPosi] = i;
+		InteriorFaceColorOffset[color]++;
 	}
 }
