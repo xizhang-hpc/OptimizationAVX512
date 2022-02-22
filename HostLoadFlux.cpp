@@ -43,27 +43,40 @@ void HostFaceLoopLoadFlux(const int localStart, const int localEnd, const int lo
 	__m512d zmmRes;
 	__m512d zmmSub;
 	__m256i indexLeft;
-	int n_block = ((nMid - localStart)/N_UNROLL)*N_UNROLL;
-	int n_tail = (nMid - localStart) - n_block;
-	printf("localStart = %d, nMid = %d, n_block = %d, n_tail = %d\n", localStart, nMid, n_block, n_tail);
-	for (faceID = localStart; faceID < n_block; faceID+=N_UNROLL){
-		indexLeft = _mm256_maskz_loadu_epi32(0xFF, leftCellofFace + faceID);
-		//indexLeft = _mm256_loadu_epi32(leftCellofFace + faceID);
-		zmmFlux = _mm512_loadu_pd(flux[0]+faceID);
-		zmmRes = _mm512_i32gather_pd(indexLeft, resAVX[0], 8);
-		zmmSub = _mm512_sub_pd(zmmRes, zmmFlux);
-		_mm512_i32scatter_pd(resAVX[0], indexLeft, zmmSub, 8);
-	}
-	if (n_tail >= 0){
-		__m512d zmmZero = _mm512_setzero_pd();	
+	__m256i indexColor;
+	__m256i indexZero = _mm256_maskz_set1_epi32(0xFF, 0);
+    //for (equationID = 0; equationID < nEquation; equationID++){
+	for (int colorID = 0; colorID < BoundFaceColorNum; colorID++){
+		int colorGroupNum = BoundFaceGroupNum[colorID];
+		int n_block = (colorGroupNum/N_UNROLL)*N_UNROLL;
+		int n_tail = colorGroupNum - n_block;
+		int colorGroupStart = BoundFaceGroupPosi[colorID];
+		printf("colorID = %d, localStart = %d, nMid = %d, n_block = %d, n_tail = %d\n", colorID, localStart, nMid, n_block, n_tail);
+		for (int colorGroupID = 0; colorGroupID < n_block; colorGroupID+=N_UNROLL){
+			indexColor = _mm256_maskz_loadu_epi32(0xFF, BoundFaceGroup + colorGroupStart + colorGroupID);
+			//indexLeft = _mm256_maskz_loadu_epi32(0xFF, leftCellofFace + faceID);
+			indexLeft = _mm256_mmask_i32gather_epi32(indexZero, 0xFF, indexColor, leftCellofFace, 4);;
+			//zmmFlux = _mm512_loadu_pd(flux[0]+faceID);
+			zmmFlux = _mm512_i32gather_pd(indexColor, flux[0], 8);
+			zmmRes = _mm512_i32gather_pd(indexLeft, resAVX[0], 8);
+			zmmSub = _mm512_sub_pd(zmmRes, zmmFlux);
+			_mm512_i32scatter_pd(resAVX[0], indexLeft, zmmSub, 8);
+		}
+		if (n_tail >= 0){
+			__m512d zmmZero = _mm512_setzero_pd();
+			indexColor = _mm256_maskz_loadu_epi32(0xFF>>(8-n_tail), BoundFaceGroup + colorGroupStart + n_block);	
 		//__m256i indexZero = _mm256_maskz_set1_epi32(0xFF, 0);
 		//indexLeft = _mm256_mask_loadu_epi32(indexZero, 0xFF>>(8-n_tail), leftCellofFace+n_block);
-		indexLeft = _mm256_maskz_loadu_epi32(0xFF>>(8-n_tail), leftCellofFace+n_block);
-		zmmFlux = _mm512_maskz_loadu_pd(0xFF>>(8-n_tail), flux[0]+n_block);
-		zmmRes = _mm512_mask_i32gather_pd(zmmZero, 0xFF>>(8-n_tail), indexLeft, resAVX[0], 8);
-		zmmSub = _mm512_sub_pd(zmmRes, zmmFlux);
-		_mm512_mask_i32scatter_pd(resAVX[0], 0xFF>>(8-n_tail), indexLeft, zmmSub, 8);
-	}
+		//indexLeft = _mm256_maskz_loadu_epi32(0xFF>>(8-n_tail), leftCellofFace+n_block);
+			indexLeft = _mm256_mmask_i32gather_epi32(indexZero, 0xFF>>(8-n_tail), indexColor, leftCellofFace, 4);;
+		//zmmFlux = _mm512_maskz_loadu_pd(0xFF>>(8-n_tail), flux[0]+n_block);
+			zmmFlux = _mm512_mask_i32gather_pd(zmmZero, 0xFF>>(8-n_tail), indexColor, flux[0], 8);
+			zmmRes = _mm512_mask_i32gather_pd(zmmZero, 0xFF>>(8-n_tail), indexLeft, resAVX[0], 8);
+			zmmSub = _mm512_sub_pd(zmmRes, zmmFlux);
+			_mm512_mask_i32scatter_pd(resAVX[0], 0xFF>>(8-n_tail), indexLeft, zmmSub, 8);
+		} //end if
+	 } //end colorID loop
+    //}//end equationID loop
 	//validate It shows that face coloring is required!
 	for (faceID = localStart; faceID < nMid; faceID++){
 		le = leftCellofFace[faceID];
@@ -77,6 +90,7 @@ void HostFaceLoopLoadFlux(const int localStart, const int localEnd, const int lo
 				
 			}
 	}
+	printf("validate boundary successfully\n");
 	//Faces on interior faces
 	for (faceID = nMid; faceID < localEnd; faceID++){
 		le = leftCellofFace[faceID];
