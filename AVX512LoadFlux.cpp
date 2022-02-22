@@ -24,12 +24,9 @@ void AVX512CellLoopLoadFluxOutside(int loopID){
 	int faceID, numFacesInCell, offset, leftRight;
 	int nEquation = nchem + nl;
 
-	int * posiCell2Face = (int *)malloc(nTotalCell * sizeof(int));
 	int * cellIDArray = (int *)malloc(nTotalCell * sizeof(int));
-	posiCell2Face[0] = 0;
 	cellIDArray[0] = 0;
 	for (cellID = 1; cellID < nTotalCell; cellID++){
-		posiCell2Face[cellID] = posiCell2Face[cellID-1] + faceNumberOfEachCell[cellID-1];
 		cellIDArray[cellID] = cellID;
 	}
 	int maxFaceNum = 6;
@@ -64,7 +61,7 @@ TIMERCPU0("HostCellLoopLoadAVXOutside", "Cell Loop Common outside");
 		zmmRes = _mm512_loadu_pd(resAVX[equationID]+cellID);
 		zmmNumFace = _mm256_maskz_loadu_epi32(0xFF, faceNumberOfEachCell + cellID);
 		zmmCellID = _mm256_maskz_loadu_epi32(0xFF, cellIDArray + cellID);
-		zmmPosiCell = _mm256_maskz_loadu_epi32(0xFF, posiCell2Face + cellID);
+		zmmPosiCell = _mm256_maskz_loadu_epi32(0xFF, cell2FacePosition + cellID);
 	    for (int offsetFace =1; offsetFace <= maxFaceNum; offsetFace++){	
 		zmmNum = _mm256_maskz_set1_epi32(0xFF, offsetFace);
 		zmmOffset = _mm256_maskz_sub_epi32(0xFF, zmmNumFace, zmmNum);
@@ -88,7 +85,7 @@ TIMERCPU0("HostCellLoopLoadAVXOutside", "Cell Loop Common outside");
 		zmmRes = _mm512_maskz_loadu_pd(kNTail ,resAVX[equationID]+n_block);
 		zmmNumFace = _mm256_maskz_loadu_epi32(kNTail, faceNumberOfEachCell + n_block);
 		zmmCellID = _mm256_maskz_loadu_epi32(kNTail, cellIDArray + n_block);
-		zmmPosiCell = _mm256_maskz_loadu_epi32(kNTail, posiCell2Face + n_block);
+		zmmPosiCell = _mm256_maskz_loadu_epi32(kNTail, cell2FacePosition + n_block);
 	    for (int offsetFace =1; offsetFace <= maxFaceNum; offsetFace++){	
 		zmmNum = _mm256_maskz_set1_epi32(kNTail, offsetFace);
 		zmmOffset = _mm256_maskz_sub_epi32(kNTail, zmmNumFace, zmmNum);
@@ -130,12 +127,9 @@ void AVX512CellLoopLoadFluxInside(int loopID){
 	int faceID, numFacesInCell, offset, leftRight;
 	int nEquation = nchem + nl;
 
-	int * posiCell2Face = (int *)malloc(nTotalCell * sizeof(int));
 	int * cellIDArray = (int *)malloc(nTotalCell * sizeof(int));
-	posiCell2Face[0] = 0;
 	cellIDArray[0] = 0;
 	for (cellID = 1; cellID < nTotalCell; cellID++){
-		posiCell2Face[cellID] = posiCell2Face[cellID-1] + faceNumberOfEachCell[cellID-1];
 		cellIDArray[cellID] = cellID;
 	}
 	int maxFaceNum = 6;
@@ -168,7 +162,7 @@ TIMERCPU0("HostCellLoopLoadAVXInside", "Cell Loop Common inside");
 	for (cellID = 0; cellID < n_block; cellID += N_UNROLL){
 		zmmNumFace = _mm256_maskz_loadu_epi32(0xFF, faceNumberOfEachCell + cellID);
 		zmmCellID = _mm256_maskz_loadu_epi32(0xFF, cellIDArray + cellID);
-		zmmPosiCell = _mm256_maskz_loadu_epi32(0xFF, posiCell2Face + cellID);
+		zmmPosiCell = _mm256_maskz_loadu_epi32(0xFF, cell2FacePosition + cellID);
           for (equationID = 0; equationID < nEquation; equationID++){
 	    zmmRes = _mm512_loadu_pd(resAVX[equationID]+cellID);
 	    for (int offsetFace =1; offsetFace <= maxFaceNum; offsetFace++){	
@@ -194,7 +188,7 @@ TIMERCPU0("HostCellLoopLoadAVXInside", "Cell Loop Common inside");
 		__mmask8 kNTail = 0xFF>>(8-n_tail);
 		zmmNumFace = _mm256_maskz_loadu_epi32(kNTail, faceNumberOfEachCell + n_block);
 		zmmCellID = _mm256_maskz_loadu_epi32(kNTail, cellIDArray + n_block);
-		zmmPosiCell = _mm256_maskz_loadu_epi32(kNTail, posiCell2Face + n_block);
+		zmmPosiCell = _mm256_maskz_loadu_epi32(kNTail, cell2FacePosition + n_block);
           for (equationID = 0; equationID < nEquation; equationID++){
 	    zmmRes = _mm512_maskz_loadu_pd(kNTail ,resAVX[equationID]+n_block);
 	    for (int offsetFace =1; offsetFace <= maxFaceNum; offsetFace++){	

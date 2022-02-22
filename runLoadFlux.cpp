@@ -10,7 +10,7 @@ void runLoadFlux(){
 	preProcessLoadFlux();
 	int localStart, localEnd;
 	int loopID;
-	int LOOPNUM = 100; //define the local LOOPNUM
+	int LOOPNUM = 1; //define the local LOOPNUM
 	for (loopID = 0; loopID < LOOPNUM; loopID++){
 		localStart = 0;
 	    	do
@@ -20,11 +20,9 @@ void runLoadFlux(){
 		        	localEnd = nTotalFace;
         		}       
 			//HostFaceLoopLoadFlux(localStart, localEnd, loopID);
-			//CallGPUCellLoopLoadFlux(loopID);
 			HostCellLoopLoadFlux(loopID);
 			AVX512CellLoopLoadFluxOutside(loopID);
 			AVX512CellLoopLoadFluxInside(loopID);
-			//CallGPUFaceLoopLoadFlux(localStart, localEnd, loopID);
 			localStart = localEnd;
 	    	} while (localStart < nTotalFace);
 	}
