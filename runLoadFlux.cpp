@@ -3,13 +3,14 @@
 #include "GlobalVariablesHost.h"
 //#include "GPULoadFlux.h"
 #include "HostLoadFlux.h"
+#include "AVX512LoadFlux.h"
 #include "constantVars.hxx"
 //#include "Validation.h"
 void runLoadFlux(){
 	preProcessLoadFlux();
 	int localStart, localEnd;
 	int loopID;
-	int LOOPNUM = 1; //define the local LOOPNUM
+	int LOOPNUM = 100; //define the local LOOPNUM
 	for (loopID = 0; loopID < LOOPNUM; loopID++){
 		localStart = 0;
 	    	do
@@ -18,9 +19,10 @@ void runLoadFlux(){
 		        if (localEnd > nTotalFace) {   
 		        	localEnd = nTotalFace;
         		}       
-			HostFaceLoopLoadFlux(localStart, localEnd, loopID);
+			//HostFaceLoopLoadFlux(localStart, localEnd, loopID);
 			//CallGPUCellLoopLoadFlux(loopID);
 			HostCellLoopLoadFlux(loopID);
+			AVX512CellLoopLoadFlux(loopID);
 			//CallGPUFaceLoopLoadFlux(localStart, localEnd, loopID);
 			localStart = localEnd;
 	    	} while (localStart < nTotalFace);
