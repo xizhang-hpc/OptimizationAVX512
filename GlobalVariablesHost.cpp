@@ -27,6 +27,14 @@ int * node2Face;
 int * faceNumberOfEachNode;
 int * node2FacePosition;
 int * isGhostCell; 
+int * BoundFaceGroup;
+int * BoundFaceGroupPosi;
+int * BoundFaceGroupNum;
+int BoundFaceColorNum = 0;
+int * InteriorFaceGroup;
+int * InteriorFaceGroupPosi;
+int * InteriorFaceGroupNum;
+int InteriorFaceColorNum = 0;
 double * xfn;
 double * yfn;
 double * zfn;
@@ -1137,4 +1145,132 @@ void freeGlobalVariablesHost(){
 	DESTROYHOSTVAR(nCount);
 	DESTROYHOSTVAR(dMin);
 	DESTROYHOSTVAR(dMax);
+}
+
+void faceColor(){
+	int * BoundFaceConflictPosi = (int *)malloc(nBoundFace * sizeof(int));
+        int * BoundFaceConflictNum = (int *)malloc(nBoundFace * sizeof(int));
+        int * InteriorFaceConflictPosi = (int *)malloc((nTotalFace - nBoundFace)*sizeof(int));
+        int * InteriorFaceConflictNum = (int *)malloc((nTotalFace - nBoundFace)*sizeof(int));
+	int sumBoundFaceConflict = 0;
+	int sumInteriorFaceConflict = 0;
+	int le, re;
+//find face conflict relationship
+	for (int i = 0; i < nBoundFace; i++){
+		le = leftCellofFace[i];
+		BoundFaceConflictPosi[i] = sumBoundFaceConflict;
+		//add the number of face in left and right cell, the total number should except itself.
+		sumBoundFaceConflict += faceNumberOfEachCell[le] - 1; 
+	}
+
+	for (int i = nBoundFace; i < nTotalFace; i++){
+		le = leftCellofFace[i];
+		re = rightCellofFace[i]; 
+		InteriorFaceConflictPosi[i - nBoundFace] = sumInteriorFaceConflict;
+		//add the number of face in left and right cell, the total number should except itself.
+		sumInteriorFaceConflict += faceNumberOfEachCell[re] - 1; 
+		sumInteriorFaceConflict += faceNumberOfEachCell[le] - 1; 
+	}
+
+	int * BoundFaceConflict = (int *)malloc(sumBoundFaceConflict*sizeof(int));
+	int * InteriorFaceConflict = (int *)malloc(sumInteriorFaceConflict*sizeof(int));
+
+	for (int i = 0; i < nBoundFace; i++){
+		le = leftCellofFace[i];
+		//Initializaion of BoundFaceConflictNum
+		BoundFaceConflictNum[i] = 0;
+		for (int j = 0; j < faceNumberOfEachCell[le]; j++) {
+			if ( i != cell2Face[le][j]) {
+				BoundFaceConflict[BoundFaceConflictPosi[i] + BoundFaceConflictNum[i]] = cell2Face[le][j];
+				BoundFaceConflictNum[i]++;
+			}
+		}
+	}
+
+
+	for (int i = nBoundFace; i < nTotalFace; i++){
+		le = leftCellofFace[i];
+		re = rightCellofFace[i];
+		int localFace = i - nBoundFace;
+		//Initializaion of InteriorFaceConflictNum
+		InteriorFaceConflictNum[localFace] = 0;
+			//
+		for (int j = 0; j < faceNumberOfEachCell[le]; j++) {
+			if ( i != cell2Face[le][j]) {
+				InteriorFaceConflict[InteriorFaceConflictPosi[localFace] + InteriorFaceConflictNum[localFace]] = cell2Face[le][j];
+				InteriorFaceConflictNum[localFace]++;
+			}
+		}
+
+		for (int j = 0; j < faceNumberOfEachCell[re]; j++) {
+			if ( i != cell2Face[re][j]) {
+				InteriorFaceConflict[InteriorFaceConflictPosi[localFace] + InteriorFaceConflictNum[localFace]] = cell2Face[re][j];
+				InteriorFaceConflictNum[localFace]++;
+			}
+		}
+	}
+
+	//color conflict faces
+
+	int colorMax = 0;
+	BoundFaceGroup = (int *)malloc(nBoundFace*sizeof(int));
+	InteriorFaceGroup = (int *)malloc((nTotalFace - nBoundFace)*sizeof(int));
+	int * faceColor = (int *)malloc(nTotalFace*sizeof(int));
+	for (int i = 0; i < nTotalFace; i++) {
+		//Initialization of faceColor with 0, which means no color
+		faceColor[i] = -1; 
+	}
+
+	for (int i = 0; i < nBoundFace; i++) {
+		int color = 0;
+		int colorSame = 0;
+		while (faceColor[i] == -1) {
+			for (int j = 0; j < BoundFaceConflictNum[i]; j++) {
+				int faceConflict = BoundFaceConflict[BoundFaceConflictPosi[i]+j];
+				if (color == faceColor[faceConflict]) {
+					colorSame = 1;
+					break;				
+				}
+			}
+			if (colorSame == 0) faceColor[i] = color;
+			else {
+				color ++;
+				colorSame = 0;
+			}
+		}
+		//record the maximum color
+		if (faceColor[i] > colorMax) colorMax = faceColor[i];
+	}
+	BoundFaceColorNum = colorMax + 1;
+	printf("Boundary faces own %d colors\n", BoundFaceColorNum);
+	BoundFaceGroupNum = (int *)malloc(BoundFaceColorNum*sizeof(int));
+	BoundFaceGroupPosi =(int *)malloc(BoundFaceColorNum*sizeof(int));
+	int * BoundFaceColorOffset = (int *)malloc(BoundFaceColorNum*sizeof(int));
+	BoundFaceGroupPosi[0] = 0;
+	for (int i = 0; i < BoundFaceColorNum; i++){
+		//Initializaiton with zero
+		BoundFaceGroupNum[i] = 0;
+		BoundFaceColorOffset[i] = 0;
+	}
+
+	for (int i = 0; i < nBoundFace; i++) {
+		int color = faceColor[i];
+		BoundFaceGroupNum[color] ++;
+	}
+
+	for (int i = 1; i < BoundFaceColorNum; i++) {
+		BoundFaceGroupPosi[i] = BoundFaceGroupPosi[i-1] + BoundFaceGroupNum[i-1];
+	}
+
+	for (int i = 0; i < BoundFaceColorNum; i++){
+		//Initializaiton with zero
+		BoundFaceColorOffset[i] = 0;
+	}
+
+	for (int i = 0; i < nBoundFace; i++) {
+		int color = faceColor[i];
+		int colorPosi = BoundFaceGroupPosi[color] + BoundFaceColorOffset[color];
+		BoundFaceGroup[colorPosi] = i;
+		BoundFaceColorOffset[color]++;
+	}
 }

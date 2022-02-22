@@ -28,6 +28,14 @@ extern int * cell2NodePosition; //The start position of one cell in cell2Node
 extern int * node2Face; //Topology information, node's faces
 extern int * faceNumberOfEachNode; //Topology information, face number owned by a node
 extern int * node2FacePosition; //Topology information, start position of face by a node
+extern int * BoundFaceGroup; //The order of face label in different colors
+extern int * BoundFaceGroupPosi; //The offset of the first face label of one face group in BoundFaceGroup
+extern int * BoundFaceGroupNum; //the number of every face group (the number of faces in one color)
+extern int BoundFaceColorNum; //the total number of color (the total number of face groups)
+extern int * InteriorFaceGroup;
+extern int * InteriorFaceGroupPosi;
+extern int * InteriorFaceGroupNum;
+extern int InteriorFaceColorNum;
 extern int * isGhostCell; //Topology information, determine whether or not is a ghost cell.
 extern double * xfn; //Geometry variable, x component of face normal
 extern double * yfn;
@@ -111,4 +119,5 @@ void setResOrg();
 void mallocFlux();
 void setFluxRandom();
 void mallocDMinDMax();
+void faceColor();
 void freeGlobalVariablesHost();

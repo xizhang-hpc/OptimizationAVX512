@@ -19,10 +19,10 @@ void runLoadFlux(){
 		        if (localEnd > nTotalFace) {   
 		        	localEnd = nTotalFace;
         		}       
-			//HostFaceLoopLoadFlux(localStart, localEnd, loopID);
-			HostCellLoopLoadFlux(loopID);
-			AVX512CellLoopLoadFluxOutside(loopID);
-			AVX512CellLoopLoadFluxInside(loopID);
+			HostFaceLoopLoadFlux(localStart, localEnd, loopID);
+			//HostCellLoopLoadFlux(loopID);
+			//AVX512CellLoopLoadFluxOutside(loopID);
+			//AVX512CellLoopLoadFluxInside(loopID);
 			localStart = localEnd;
 	    	} while (localStart < nTotalFace);
 	}
@@ -43,6 +43,7 @@ void preProcessLoadFlux(){
 	setResOrg();
 	mallocFlux();
 	setFluxRandom();
+	faceColor();
 	/*
 	//for device data
 	devAltCpyLeftRightCellofFace();
