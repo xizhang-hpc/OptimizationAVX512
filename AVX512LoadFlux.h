@@ -1,1 +1,2 @@
-void AVX512CellLoopLoadFlux(int loopID);
+void AVX512CellLoopLoadFluxOutside(int loopID);
+void AVX512CellLoopLoadFluxInside(int loopID);

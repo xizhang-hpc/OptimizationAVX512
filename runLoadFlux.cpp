@@ -22,7 +22,8 @@ void runLoadFlux(){
 			//HostFaceLoopLoadFlux(localStart, localEnd, loopID);
 			//CallGPUCellLoopLoadFlux(loopID);
 			HostCellLoopLoadFlux(loopID);
-			AVX512CellLoopLoadFlux(loopID);
+			AVX512CellLoopLoadFluxOutside(loopID);
+			AVX512CellLoopLoadFluxInside(loopID);
 			//CallGPUFaceLoopLoadFlux(localStart, localEnd, loopID);
 			localStart = localEnd;
 	    	} while (localStart < nTotalFace);
