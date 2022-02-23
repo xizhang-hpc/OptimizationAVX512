@@ -6,6 +6,8 @@
 extern int * bcType; //boundary type array
 extern int * leftCellofFace; //Topology information, face's owner cell
 extern int * rightCellofFace;//Topology information face's neighbour cell
+extern int * leftCellofFaceRe; //reorder leftCellofFace by face coloring
+extern int * rightCellofFaceRe;//reorder
 extern int ** cell2Face; //Topology information, cell's faces
 extern int ** cell2Cell; //Topology information, cell's cell, they share the same face
 extern int ** cell2FaceRe; //reorder cell2Face's face order, put left faces together and ahead
@@ -65,6 +67,7 @@ extern fpkind ** res; //residual for ns equations
 extern fpkind ** resOrg; //store the original res for repeat computing
 extern fpkind ** resAVX; //residual for ns equations by AVX512
 extern fpkind ** flux; //flux for 5 unkonwns rho, u, v, w, p on faces.
+extern fpkind ** fluxRe; //reorder flux by face coloring
 extern fpkind ** qNode; //qNS on nodes 
 extern fpkind * limit; //limit on faces 
 extern fpkind ** tNode; // temperature on nodes
@@ -120,4 +123,5 @@ void mallocFlux();
 void setFluxRandom();
 void mallocDMinDMax();
 void faceColor();
+void reorderFaceVars();
 void freeGlobalVariablesHost();

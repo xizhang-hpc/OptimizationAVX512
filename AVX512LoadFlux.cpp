@@ -358,7 +358,7 @@ void AVX512FaceLoopLoadFluxOutside(int loopID){
 				}
 			}
     		}
-		printf("validate AVX512 faceLoadFlux successfully\n");
+		printf("validate AVX512 faceLoadFlux outside successfully\n");
 	}
 }
 
@@ -414,13 +414,13 @@ void AVX512FaceLoopLoadFluxInside(int loopID){
 	}//end equationID loop
     
 	//Interior faces
-	for (equationID = 0; equationID < nEquation; equationID++){
-		for (int colorID = 0; colorID < InteriorFaceColorNum; colorID++){
-			int colorGroupNum = InteriorFaceGroupNum[colorID];
-			int n_block = (colorGroupNum/N_UNROLL)*N_UNROLL;
-			int n_tail = colorGroupNum - n_block;
-			//for (int faceID = faceID; faceID < n_block; faceID+=N_UNROLL){
-			int colorGroupStart = InteriorFaceGroupPosi[colorID];
+	for (int colorID = 0; colorID < InteriorFaceColorNum; colorID++){
+		int colorGroupNum = InteriorFaceGroupNum[colorID];
+		int n_block = (colorGroupNum/N_UNROLL)*N_UNROLL;
+		int n_tail = colorGroupNum - n_block;
+		//for (int faceID = faceID; faceID < n_block; faceID+=N_UNROLL){
+		int colorGroupStart = InteriorFaceGroupPosi[colorID];
+		for (equationID = 0; equationID < nEquation; equationID++){
 			//printf("colorID = %d, colorGroupNum = %d, n_block = %d, n_tail = %d\n", colorID, colorGroupNum, n_block, n_tail);
 			for (int colorGroupID = 0; colorGroupID < n_block; colorGroupID+=N_UNROLL){
 				indexColor = _mm256_maskz_loadu_epi32(0xFF, InteriorFaceGroup + colorGroupStart + colorGroupID);
@@ -456,8 +456,8 @@ void AVX512FaceLoopLoadFluxInside(int loopID){
 				zmmAdd = _mm512_add_pd(zmmRes, zmmFlux);
 				_mm512_mask_i32scatter_pd(resAVX[equationID], kNTail, indexRight, zmmAdd, 8);
 			}//end n_tail
-		}// end color loop
-	}
+		}// end equation loop
+	}//end color loop
 	TIMERCPU1("HostFaceLoopLoadAVXInside");
 	//validate
 	if (loopID == 0){
@@ -494,6 +494,280 @@ void AVX512FaceLoopLoadFluxInside(int loopID){
 				}
 			}
     		}
-		printf("validate AVX512 faceLoadFlux successfully\n");
+		printf("validate AVX512 faceLoadFlux inside successfully\n");
+	}
+}
+
+void AVX512FaceLoopLoadFluxInsideReOpt(int loopID){
+	if (loopID == 0) printf("AVX512FaceLoopLoadFluxInsideReOpt\n");
+
+	int faceID, equationID;
+	int le, re;
+	int nEquation = nl + nchem;
+
+	resetResAVX(loopID);
+
+	__m512d zmmFlux;
+	__m512d zmmRes;
+	__m512d zmmSub;
+	__m512d zmmAdd;
+	__m256i indexLeft;
+	__m256i indexRight;
+	//__m256i indexColor;
+	__m256i indexZero = _mm256_maskz_set1_epi32(0xFF, 0);
+	//boundary faces
+	TIMERCPU0("HostFaceLoopLoadAVXInsideReOpt", "Face Loop AVX512 inside re");
+	for (int colorID = 0; colorID < BoundFaceColorNum; colorID++){
+		int colorGroupNum = BoundFaceGroupNum[colorID];
+		int n_block = (colorGroupNum/N_UNROLL)*N_UNROLL;
+		int n_tail = colorGroupNum - n_block;
+		int colorGroupStart = BoundFaceGroupPosi[colorID];
+    		for (equationID = 0; equationID < nEquation; equationID++){
+			//printf("colorID = %d, colorGroupNum = %d, n_block = %d, n_tail = %d\n", colorID, colorGroupNum, n_block, n_tail);
+			for (int colorGroupID = 0; colorGroupID < n_block; colorGroupID+=N_UNROLL){
+				//indexColor = _mm256_maskz_loadu_epi32(0xFF, BoundFaceGroup + colorGroupStart + colorGroupID);
+				indexLeft = _mm256_maskz_loadu_epi32(0xFF, leftCellofFaceRe + colorGroupStart + colorGroupID);
+				//indexLeft = _mm256_mmask_i32gather_epi32(indexZero, 0xFF, indexColor, leftCellofFace, 4);;
+				zmmFlux = _mm512_loadu_pd(fluxRe[equationID]+ colorGroupStart + colorGroupID);
+				//zmmFlux = _mm512_i32gather_pd(indexColor, flux[equationID], 8);
+				zmmRes = _mm512_i32gather_pd(indexLeft, resAVX[equationID], 8);
+				zmmSub = _mm512_sub_pd(zmmRes, zmmFlux);
+				_mm512_i32scatter_pd(resAVX[equationID], indexLeft, zmmSub, 8);
+			}
+			if (n_tail >= 0){
+				__m512d zmmZero = _mm512_setzero_pd();
+				//indexColor = _mm256_maskz_loadu_epi32(0xFF>>(8-n_tail), BoundFaceGroup + colorGroupStart + n_block);	
+				//indexLeft = _mm256_mask_loadu_epi32(indexZero, 0xFF>>(8-n_tail), leftCellofFace+n_block);
+				indexLeft = _mm256_maskz_loadu_epi32(0xFF>>(8-n_tail), leftCellofFaceRe + colorGroupStart + n_block);
+				//indexLeft = _mm256_mmask_i32gather_epi32(indexZero, 0xFF>>(8-n_tail), indexColor, leftCellofFace, 4);;
+				zmmFlux = _mm512_maskz_loadu_pd(0xFF>>(8-n_tail), fluxRe[equationID]+colorGroupStart+n_block);
+				//zmmFlux = _mm512_mask_i32gather_pd(zmmZero, 0xFF>>(8-n_tail), indexColor, flux[equationID], 8);
+				zmmRes = _mm512_mask_i32gather_pd(zmmZero, 0xFF>>(8-n_tail), indexLeft, resAVX[equationID], 8);
+				zmmSub = _mm512_sub_pd(zmmRes, zmmFlux);
+				_mm512_mask_i32scatter_pd(resAVX[equationID], 0xFF>>(8-n_tail), indexLeft, zmmSub, 8);
+			} //end if
+		} //end equationID loop
+	}//end colorID loop
+    
+	//Interior faces
+	for (int colorID = 0; colorID < InteriorFaceColorNum; colorID++){
+		int colorGroupNum = InteriorFaceGroupNum[colorID];
+		int n_block = (colorGroupNum/N_UNROLL)*N_UNROLL;
+		int n_tail = colorGroupNum - n_block;
+		//for (int faceID = faceID; faceID < n_block; faceID+=N_UNROLL){
+		//int colorGroupStart = InteriorFaceGroupPosi[colorID];
+		int colorGroupStart = InteriorFaceGroupPosi[colorID] + nBoundFace;
+		//printf("colorID = %d, colorGroupNum = %d, n_block = %d, n_tail = %d\n", colorID, colorGroupNum, n_block, n_tail);
+		for (equationID = 0; equationID < nEquation; equationID++){
+			for (int colorGroupID = 0; colorGroupID < n_block; colorGroupID+=N_UNROLL){
+				//indexColor = _mm256_maskz_loadu_epi32(0xFF, InteriorFaceGroup + colorGroupStart + colorGroupID);
+				indexLeft = _mm256_maskz_loadu_epi32(0xFF, leftCellofFaceRe + colorGroupStart + colorGroupID);
+				indexRight = _mm256_maskz_loadu_epi32(0xFF, rightCellofFaceRe + colorGroupStart + colorGroupID);
+				//indexLeft = _mm256_mmask_i32gather_epi32(indexZero, 0xFF, indexColor, leftCellofFace, 4);
+				//indexRight = _mm256_mmask_i32gather_epi32(indexZero, 0xFF, indexColor, rightCellofFace, 4);
+				zmmFlux = _mm512_loadu_pd(fluxRe[equationID]+ colorGroupStart + colorGroupID);
+				//zmmFlux = _mm512_i32gather_pd(indexColor, flux[equationID], 8);
+				zmmRes = _mm512_i32gather_pd(indexLeft, resAVX[equationID], 8);
+				zmmSub = _mm512_sub_pd(zmmRes, zmmFlux);
+				_mm512_i32scatter_pd(resAVX[equationID], indexLeft, zmmSub, 8);
+				zmmRes = _mm512_i32gather_pd(indexRight, resAVX[equationID], 8);
+				zmmAdd = _mm512_add_pd(zmmRes, zmmFlux);
+				_mm512_i32scatter_pd(resAVX[equationID], indexRight, zmmAdd, 8);
+
+			}
+			//for n_tail
+			if (n_tail > 0){
+				__mmask8 kNTail = 0xFF>>(8-n_tail);
+				__m512d zmmZero = _mm512_setzero_pd();
+				//indexColor = _mm256_maskz_loadu_epi32(kNTail, InteriorFaceGroup + colorGroupStart + n_block);	
+				indexLeft = _mm256_maskz_loadu_epi32(kNTail, leftCellofFaceRe + colorGroupStart + n_block);
+				indexRight = _mm256_maskz_loadu_epi32(kNTail, rightCellofFaceRe + colorGroupStart + n_block);
+				//indexLeft = _mm256_mmask_i32gather_epi32(indexZero, kNTail, indexColor, leftCellofFace, 4);
+				//indexRight = _mm256_mmask_i32gather_epi32(indexZero, kNTail, indexColor, rightCellofFace, 4);
+				zmmFlux = _mm512_maskz_loadu_pd(kNTail, fluxRe[equationID]+colorGroupStart+n_block);
+				//zmmFlux = _mm512_mask_i32gather_pd(zmmZero, kNTail, indexColor, flux[equationID], 8);
+				zmmRes = _mm512_mask_i32gather_pd(zmmZero, kNTail, indexLeft, resAVX[equationID], 8);
+				zmmSub = _mm512_sub_pd(zmmRes, zmmFlux);
+				_mm512_mask_i32scatter_pd(resAVX[equationID], kNTail, indexLeft, zmmSub, 8);
+				zmmRes = _mm512_mask_i32gather_pd(zmmZero, kNTail, indexRight, resAVX[equationID], 8);
+				zmmAdd = _mm512_add_pd(zmmRes, zmmFlux);
+				_mm512_mask_i32scatter_pd(resAVX[equationID], kNTail, indexRight, zmmAdd, 8);
+			}//end n_tail
+		}// end color loop
+	}
+	TIMERCPU1("HostFaceLoopLoadAVXInsideReOpt");
+	//validate
+	if (loopID == 0){
+		for (equationID = 0; equationID < nEquation; equationID++){
+			for (faceID = 0; faceID < nBoundFace; faceID++){
+				le = leftCellofFace[faceID];
+				if (abs(res[equationID][le]-resAVX[equationID][le])>1.0e-12) {
+					printf("Error: on face %d, cell %d, res %.30e is not equal to resAVX %.30e\n", faceID, le, res[equationID][le], resAVX[equationID][le]);
+					int numFaceInCell = faceNumberOfEachCell[le];
+					for (int offset = 0; offset < numFaceInCell; offset++){
+						printf("%d\n", cell2Face[le][offset]);
+					}
+					exit(0);
+				}
+			}
+			for (faceID = nBoundFace; faceID < nTotalFace; faceID++){
+				le = leftCellofFace[faceID];
+				re = rightCellofFace[faceID];
+				if (abs(res[equationID][le]-resAVX[equationID][le])>1.0e-12) {
+					printf("Error: on face %d, cell %d, res %.30e is not equal to resAVX %.30e\n", faceID, le, res[equationID][le], resAVX[equationID][le]);
+					int numFaceInCell = faceNumberOfEachCell[le];
+					for (int offset = 0; offset < numFaceInCell; offset++){
+						printf("%d\n", cell2Face[le][offset]);
+					}
+					exit(0);
+				}
+				if (abs(res[equationID][re]-resAVX[equationID][re])>1.0e-12) {
+					printf("Error: on face %d, cell %d, res %.30e is not equal to resAVX %.30e\n", faceID, re, res[equationID][re], resAVX[equationID][re]);
+					int numFaceInCell = faceNumberOfEachCell[le];
+					for (int offset = 0; offset < numFaceInCell; offset++){
+						printf("%d\n", cell2Face[re][offset]);
+					}
+					exit(0);
+				}
+			}
+    		}
+		printf("validate AVX512 faceLoadFlux inside opt successfully\n");
+	}
+}
+
+void AVX512FaceLoopLoadFluxOutsideReOpt(int loopID){
+	if (loopID == 0) printf("AVX512FaceLoopLoadFluxOutsideReOpt\n");
+
+	int faceID, equationID;
+	int le, re;
+	int nEquation = nl + nchem;
+
+	resetResAVX(loopID);
+
+	__m512d zmmFlux;
+	__m512d zmmRes;
+	__m512d zmmSub;
+	__m512d zmmAdd;
+	__m256i indexLeft;
+	__m256i indexRight;
+	//__m256i indexColor;
+	__m256i indexZero = _mm256_maskz_set1_epi32(0xFF, 0);
+	//boundary faces
+	TIMERCPU0("HostFaceLoopLoadAVXOutsideReOpt", "Face Loop AVX512 outside re");
+    	for (equationID = 0; equationID < nEquation; equationID++){
+		for (int colorID = 0; colorID < BoundFaceColorNum; colorID++){
+			int colorGroupNum = BoundFaceGroupNum[colorID];
+			int n_block = (colorGroupNum/N_UNROLL)*N_UNROLL;
+			int n_tail = colorGroupNum - n_block;
+			int colorGroupStart = BoundFaceGroupPosi[colorID];
+			//printf("colorID = %d, colorGroupNum = %d, n_block = %d, n_tail = %d\n", colorID, colorGroupNum, n_block, n_tail);
+			for (int colorGroupID = 0; colorGroupID < n_block; colorGroupID+=N_UNROLL){
+				//indexColor = _mm256_maskz_loadu_epi32(0xFF, BoundFaceGroup + colorGroupStart + colorGroupID);
+				indexLeft = _mm256_maskz_loadu_epi32(0xFF, leftCellofFaceRe + colorGroupStart + colorGroupID);
+				//indexLeft = _mm256_mmask_i32gather_epi32(indexZero, 0xFF, indexColor, leftCellofFace, 4);;
+				zmmFlux = _mm512_loadu_pd(fluxRe[equationID]+ colorGroupStart + colorGroupID);
+				//zmmFlux = _mm512_i32gather_pd(indexColor, flux[equationID], 8);
+				zmmRes = _mm512_i32gather_pd(indexLeft, resAVX[equationID], 8);
+				zmmSub = _mm512_sub_pd(zmmRes, zmmFlux);
+				_mm512_i32scatter_pd(resAVX[equationID], indexLeft, zmmSub, 8);
+			}
+			if (n_tail >= 0){
+				__m512d zmmZero = _mm512_setzero_pd();
+				//indexColor = _mm256_maskz_loadu_epi32(0xFF>>(8-n_tail), BoundFaceGroup + colorGroupStart + n_block);	
+				//indexLeft = _mm256_mask_loadu_epi32(indexZero, 0xFF>>(8-n_tail), leftCellofFace+n_block);
+				indexLeft = _mm256_maskz_loadu_epi32(0xFF>>(8-n_tail), leftCellofFaceRe + colorGroupStart + n_block);
+				//indexLeft = _mm256_mmask_i32gather_epi32(indexZero, 0xFF>>(8-n_tail), indexColor, leftCellofFace, 4);;
+				zmmFlux = _mm512_maskz_loadu_pd(0xFF>>(8-n_tail), fluxRe[equationID]+colorGroupStart+n_block);
+				//zmmFlux = _mm512_mask_i32gather_pd(zmmZero, 0xFF>>(8-n_tail), indexColor, flux[equationID], 8);
+				zmmRes = _mm512_mask_i32gather_pd(zmmZero, 0xFF>>(8-n_tail), indexLeft, resAVX[equationID], 8);
+				zmmSub = _mm512_sub_pd(zmmRes, zmmFlux);
+				_mm512_mask_i32scatter_pd(resAVX[equationID], 0xFF>>(8-n_tail), indexLeft, zmmSub, 8);
+			} //end if
+		} //end colorID loop
+	}//end equationID loop
+    
+	//Interior faces
+	for (equationID = 0; equationID < nEquation; equationID++){
+		for (int colorID = 0; colorID < InteriorFaceColorNum; colorID++){
+			int colorGroupNum = InteriorFaceGroupNum[colorID];
+			int n_block = (colorGroupNum/N_UNROLL)*N_UNROLL;
+			int n_tail = colorGroupNum - n_block;
+			//for (int faceID = faceID; faceID < n_block; faceID+=N_UNROLL){
+			//int colorGroupStart = InteriorFaceGroupPosi[colorID];
+			int colorGroupStart = InteriorFaceGroupPosi[colorID] + nBoundFace;
+			//printf("colorID = %d, colorGroupNum = %d, n_block = %d, n_tail = %d\n", colorID, colorGroupNum, n_block, n_tail);
+			for (int colorGroupID = 0; colorGroupID < n_block; colorGroupID+=N_UNROLL){
+				//indexColor = _mm256_maskz_loadu_epi32(0xFF, InteriorFaceGroup + colorGroupStart + colorGroupID);
+				indexLeft = _mm256_maskz_loadu_epi32(0xFF, leftCellofFaceRe + colorGroupStart + colorGroupID);
+				indexRight = _mm256_maskz_loadu_epi32(0xFF, rightCellofFaceRe + colorGroupStart + colorGroupID);
+				//indexLeft = _mm256_mmask_i32gather_epi32(indexZero, 0xFF, indexColor, leftCellofFace, 4);
+				//indexRight = _mm256_mmask_i32gather_epi32(indexZero, 0xFF, indexColor, rightCellofFace, 4);
+				zmmFlux = _mm512_loadu_pd(fluxRe[equationID]+ colorGroupStart + colorGroupID);
+				//zmmFlux = _mm512_i32gather_pd(indexColor, flux[equationID], 8);
+				zmmRes = _mm512_i32gather_pd(indexLeft, resAVX[equationID], 8);
+				zmmSub = _mm512_sub_pd(zmmRes, zmmFlux);
+				_mm512_i32scatter_pd(resAVX[equationID], indexLeft, zmmSub, 8);
+				zmmRes = _mm512_i32gather_pd(indexRight, resAVX[equationID], 8);
+				zmmAdd = _mm512_add_pd(zmmRes, zmmFlux);
+				_mm512_i32scatter_pd(resAVX[equationID], indexRight, zmmAdd, 8);
+
+			}
+			//for n_tail
+			if (n_tail > 0){
+				__mmask8 kNTail = 0xFF>>(8-n_tail);
+				__m512d zmmZero = _mm512_setzero_pd();
+				//indexColor = _mm256_maskz_loadu_epi32(kNTail, InteriorFaceGroup + colorGroupStart + n_block);	
+				indexLeft = _mm256_maskz_loadu_epi32(kNTail, leftCellofFaceRe + colorGroupStart + n_block);
+				indexRight = _mm256_maskz_loadu_epi32(kNTail, rightCellofFaceRe + colorGroupStart + n_block);
+				//indexLeft = _mm256_mmask_i32gather_epi32(indexZero, kNTail, indexColor, leftCellofFace, 4);
+				//indexRight = _mm256_mmask_i32gather_epi32(indexZero, kNTail, indexColor, rightCellofFace, 4);
+				zmmFlux = _mm512_maskz_loadu_pd(kNTail, fluxRe[equationID]+colorGroupStart+n_block);
+				//zmmFlux = _mm512_mask_i32gather_pd(zmmZero, kNTail, indexColor, flux[equationID], 8);
+				zmmRes = _mm512_mask_i32gather_pd(zmmZero, kNTail, indexLeft, resAVX[equationID], 8);
+				zmmSub = _mm512_sub_pd(zmmRes, zmmFlux);
+				_mm512_mask_i32scatter_pd(resAVX[equationID], kNTail, indexLeft, zmmSub, 8);
+				zmmRes = _mm512_mask_i32gather_pd(zmmZero, kNTail, indexRight, resAVX[equationID], 8);
+				zmmAdd = _mm512_add_pd(zmmRes, zmmFlux);
+				_mm512_mask_i32scatter_pd(resAVX[equationID], kNTail, indexRight, zmmAdd, 8);
+			}//end n_tail
+		}// end color loop
+	}//end equationID loop
+	TIMERCPU1("HostFaceLoopLoadAVXOutsideReOpt");
+	//validate
+	if (loopID == 0){
+		for (equationID = 0; equationID < nEquation; equationID++){
+			for (faceID = 0; faceID < nBoundFace; faceID++){
+				le = leftCellofFace[faceID];
+				if (abs(res[equationID][le]-resAVX[equationID][le])>1.0e-12) {
+					printf("Error: on face %d, cell %d, res %.30e is not equal to resAVX %.30e\n", faceID, le, res[equationID][le], resAVX[equationID][le]);
+					int numFaceInCell = faceNumberOfEachCell[le];
+					for (int offset = 0; offset < numFaceInCell; offset++){
+						printf("%d\n", cell2Face[le][offset]);
+					}
+					exit(0);
+				}
+			}
+			for (faceID = nBoundFace; faceID < nTotalFace; faceID++){
+				le = leftCellofFace[faceID];
+				re = rightCellofFace[faceID];
+				if (abs(res[equationID][le]-resAVX[equationID][le])>1.0e-12) {
+					printf("Error: on face %d, cell %d, res %.30e is not equal to resAVX %.30e\n", faceID, le, res[equationID][le], resAVX[equationID][le]);
+					int numFaceInCell = faceNumberOfEachCell[le];
+					for (int offset = 0; offset < numFaceInCell; offset++){
+						printf("%d\n", cell2Face[le][offset]);
+					}
+					exit(0);
+				}
+				if (abs(res[equationID][re]-resAVX[equationID][re])>1.0e-12) {
+					printf("Error: on face %d, cell %d, res %.30e is not equal to resAVX %.30e\n", faceID, re, res[equationID][re], resAVX[equationID][re]);
+					int numFaceInCell = faceNumberOfEachCell[le];
+					for (int offset = 0; offset < numFaceInCell; offset++){
+						printf("%d\n", cell2Face[re][offset]);
+					}
+					exit(0);
+				}
+			}
+    		}
+		printf("validate AVX512 faceLoadFlux outside opt  successfully\n");
 	}
 }

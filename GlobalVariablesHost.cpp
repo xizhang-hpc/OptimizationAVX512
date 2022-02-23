@@ -4,6 +4,8 @@
 int * bcType; //boundary type array
 int * leftCellofFace; //Topology variable owner
 int * rightCellofFace;//Topology variable neighbour
+int * leftCellofFaceRe; //reorder topology variable owner by face coloring
+int * rightCellofFaceRe;//reorder topology variable neighbour by face coloring
 int ** cell2Face;
 int ** cell2Cell;
 int ** cell2FaceRe;
@@ -63,6 +65,7 @@ fpkind ** res; //residual for ns equations
 fpkind ** resOrg;
 fpkind ** resAVX; //residual by AVX512
 fpkind ** flux; //flux for 5 unkonwns rho, u, v, w, p on faces.
+fpkind ** fluxRe; //reorder flux by face coloring
 fpkind ** qNode;
 fpkind ** tNode;
 fpkind * limit;
@@ -1332,5 +1335,35 @@ void faceColor(){
 		int colorPosi = InteriorFaceGroupPosi[color] + InteriorFaceColorOffset[color];
 		InteriorFaceGroup[colorPosi] = i;
 		InteriorFaceColorOffset[color]++;
+	}
+}
+void reorderFaceVars(){
+	int equationID;
+	leftCellofFaceRe = (int *)malloc(nTotalFace*sizeof(int));
+	rightCellofFaceRe = (int *)malloc(nTotalFace*sizeof(int));
+	int nEquation = nl + nchem;
+	fluxRe = (fpkind**)malloc(sizeof(fpkind *) * nEquation);
+	fluxRe[0] = (fpkind *)malloc(sizeof(fpkind) * nEquation * SEG_LEN);
+	for (equationID = 1; equationID < nEquation; equationID++){
+		fluxRe[equationID] = &fluxRe[equationID-1][SEG_LEN];
+	}
+
+	for (int groupFaceID = 0; groupFaceID < nBoundFace; groupFaceID++){
+		int faceID = BoundFaceGroup[groupFaceID];
+		leftCellofFaceRe[groupFaceID] = leftCellofFace[faceID];
+		rightCellofFaceRe[groupFaceID] = rightCellofFace[faceID];
+		for (int equationID = 0; equationID < nEquation; equationID++){
+			fluxRe[equationID][groupFaceID] = flux[equationID][faceID];
+		}
+	}
+
+	for (int groupFaceID = nBoundFace; groupFaceID < nTotalFace; groupFaceID++){
+		int offset = groupFaceID - nBoundFace;
+		int faceID = InteriorFaceGroup[offset];
+		leftCellofFaceRe[groupFaceID] = leftCellofFace[faceID];
+		rightCellofFaceRe[groupFaceID] = rightCellofFace[faceID];
+		for (int equationID = 0; equationID < nEquation; equationID++){
+			fluxRe[equationID][groupFaceID] = flux[equationID][faceID];
+		}
 	}
 }

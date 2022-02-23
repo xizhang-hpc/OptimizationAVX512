@@ -22,6 +22,8 @@ void runLoadFlux(){
 			HostFaceLoopLoadFlux(localStart, localEnd, loopID);
 			AVX512FaceLoopLoadFluxOutside(loopID);
 			AVX512FaceLoopLoadFluxInside(loopID);
+			AVX512FaceLoopLoadFluxInsideReOpt(loopID);
+			AVX512FaceLoopLoadFluxOutsideReOpt(loopID);
 			//HostCellLoopLoadFlux(loopID);
 			//AVX512CellLoopLoadFluxOutside(loopID);
 			//AVX512CellLoopLoadFluxInside(loopID);
@@ -46,6 +48,7 @@ void preProcessLoadFlux(){
 	mallocFlux();
 	setFluxRandom();
 	faceColor();
+	reorderFaceVars();
 	/*
 	//for device data
 	devAltCpyLeftRightCellofFace();
