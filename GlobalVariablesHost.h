@@ -74,6 +74,8 @@ extern fpkind ** tNode; // temperature on nodes
 extern int * nCount; //cell number of each node by calculation. what's the difference between nCount and cellNumberOfEachNode (nCPN)??
 extern fpkind * dMin; //local minimum value of q on cells, by calculation
 extern fpkind * dMax; //local maxmum value of q on cells, by calculation
+extern fpkind * dMinAVX; //AVX
+extern fpkind * dMaxAVX; //AVX
 void setPropertyOfSimulation();
 void setSEGLEN();
 void readLeftRightCellofFace();

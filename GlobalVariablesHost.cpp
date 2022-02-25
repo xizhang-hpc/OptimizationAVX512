@@ -72,6 +72,8 @@ fpkind * limit;
 int * nCount; //cell number of each node by calculation. what's the difference between nCount and nodeNumberOfEachCell (nCPN)??
 fpkind * dMin; //local minimum value of q on cells, by calculation
 fpkind * dMax; //local maxmum value of q on cells, by calculation
+fpkind * dMinAVX; //AVX
+fpkind * dMaxAVX; //AVX
 void setPropertyOfSimulation(){
 	nl = 5; //rho, u, v, w, p
 	nchem = 0; //do not consider chemistry
@@ -1097,11 +1099,15 @@ void mallocDMinDMax(){
 	size_t sizeMinMax = nTotalCell * sizeof(fpkind);
 	dMin = (fpkind *)malloc(sizeMinMax);
 	dMax = (fpkind *)malloc(sizeMinMax);
+	dMinAVX = (fpkind *)malloc(sizeMinMax);
+	dMaxAVX = (fpkind *)malloc(sizeMinMax);
 	int iCell;
 	//initialize dMin and dMax by 0.0
 	for (iCell = 0; iCell < nTotalCell; iCell++){
 		dMin[iCell] = 0.0;
 		dMax[iCell] = 0.0;
+		dMinAVX[iCell] = 0.0;
+		dMaxAVX[iCell] = 0.0;
 	}
 }
 
@@ -1148,6 +1154,8 @@ void freeGlobalVariablesHost(){
 	DESTROYHOSTVAR(nCount);
 	DESTROYHOSTVAR(dMin);
 	DESTROYHOSTVAR(dMax);
+	DESTROYHOSTVAR(dMinAVX);
+	DESTROYHOSTVAR(dMaxAVX);
 }
 
 void faceColor(){

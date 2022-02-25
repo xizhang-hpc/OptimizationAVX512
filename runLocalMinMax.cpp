@@ -5,7 +5,7 @@
 void runLocalMinMax(){
 	preProcessLocalMinMax();
 	int loopID;
-	int loopNum = 100;
+	int loopNum = 1;
 	for (loopID = 0; loopID < loopNum; loopID++){
 		HostFaceLoopLocalMinMax(loopID);
 		HostCellLoopLocalMinMax(loopID);
@@ -23,5 +23,6 @@ void preProcessLocalMinMax(){
 	readBoundaryType();
 	setQNSRandom();
 	mallocDMinDMax();
+	faceColor();
 	
 }
