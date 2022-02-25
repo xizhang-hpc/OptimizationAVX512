@@ -49,18 +49,4 @@ void preProcessLoadFlux(){
 	setFluxRandom();
 	faceColor();
 	reorderFaceVars();
-	/*
-	//for device data
-	devAltCpyLeftRightCellofFace();
-	devAltCpyNumberFaceOfEaceCell();
-	devAltCpyCell2Face();
-	devAltCpyLeftRightFace();
-	devAltRes();
-	devCpyRes();
-	devAltCpyResOrg();
-	devAltResAOS();
-	devAltFlux();
-	devCpyFlux();
-	devAltFluxAOS();
-	*/
 }

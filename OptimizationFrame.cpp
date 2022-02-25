@@ -5,7 +5,7 @@
 //#include "runQTNcountCompInterior.h"
 //#include "runCompGradientGGNodeFaceCal.h"
 #include "runLoadFlux.h"
-//#include "runLocalMinMax.h"
+#include "runLocalMinMax.h"
 #include "newTimer.h"
 using namespace newTimer;
 int main(int argc, char ** argv){
@@ -13,8 +13,8 @@ int main(int argc, char ** argv){
 //	deviceControl();
 	//runQTNcountCompInterior(); //Optimize GPUInteriorFaceNCountQNodeTNodeCal
 	//runCompGradientGGNodeFaceCal();//Optimize CompGradientGGNodeInteriorFaceCal
-	runLoadFlux(); //Optimize LoadFlux
-//	runLocalMinMax(); //local max and min of qNS
+//	runLoadFlux(); //Optimize LoadFlux
+	runLocalMinMax(); //local max and min of qNS
 	outputTimers();
 	//free host and device variables
 	freeGlobalVariablesHost();

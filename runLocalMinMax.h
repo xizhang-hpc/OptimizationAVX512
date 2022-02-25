@@ -1,0 +1,2 @@
+void runLocalMinMax();
+void preProcessLocalMinMax();
