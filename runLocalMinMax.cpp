@@ -2,6 +2,7 @@
 #include "runLocalMinMax.h"
 #include "HostLocalMinMax.h"
 #include "GlobalVariablesHost.h"
+#include "AVX512LocalMinMax.h"
 void runLocalMinMax(){
 	preProcessLocalMinMax();
 	int loopID;
@@ -9,6 +10,7 @@ void runLocalMinMax(){
 	for (loopID = 0; loopID < loopNum; loopID++){
 		HostFaceLoopLocalMinMax(loopID);
 		HostCellLoopLocalMinMax(loopID);
+		AVX512FaceLoopLocalMinMax(loopID);
 	}
 }
 
