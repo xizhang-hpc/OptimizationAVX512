@@ -2,7 +2,7 @@
 //#include "OptimizationFrame.h"
 //#include "DeviceControl.h"
 #include "GlobalVariablesHost.h"
-//#include "runQTNcountCompInterior.h"
+#include "runQTNcountCompInterior.h"
 //#include "runCompGradientGGNodeFaceCal.h"
 #include "runLoadFlux.h"
 #include "runLocalMinMax.h"
@@ -11,10 +11,10 @@ using namespace newTimer;
 int main(int argc, char ** argv){
 	printf("Hello, Optimization Platform\n");
 //	deviceControl();
-	//runQTNcountCompInterior(); //Optimize GPUInteriorFaceNCountQNodeTNodeCal
+	runQTNcountCompInterior(); //Optimize GPUInteriorFaceNCountQNodeTNodeCal
 	//runCompGradientGGNodeFaceCal();//Optimize CompGradientGGNodeInteriorFaceCal
 //	runLoadFlux(); //Optimize LoadFlux
-	runLocalMinMax(); //local max and min of qNS
+	//runLocalMinMax(); //local max and min of qNS
 	outputTimers();
 	//free host and device variables
 	freeGlobalVariablesHost();
