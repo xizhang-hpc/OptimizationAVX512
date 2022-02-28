@@ -11,6 +11,7 @@ void runLocalMinMax(){
 		HostFaceLoopLocalMinMax(loopID);
 		HostCellLoopLocalMinMax(loopID);
 		AVX512FaceLoopLocalMinMax(loopID);
+		AVX512FaceLoopLocalMinMaxReOpt(loopID);
 	}
 }
 
@@ -26,5 +27,6 @@ void preProcessLocalMinMax(){
 	setQNSRandom();
 	mallocDMinDMax();
 	faceColor();
+	reorderFaceVars();
 	
 }

@@ -1350,18 +1350,22 @@ void reorderFaceVars(){
 	leftCellofFaceRe = (int *)malloc(nTotalFace*sizeof(int));
 	rightCellofFaceRe = (int *)malloc(nTotalFace*sizeof(int));
 	int nEquation = nl + nchem;
-	fluxRe = (fpkind**)malloc(sizeof(fpkind *) * nEquation);
-	fluxRe[0] = (fpkind *)malloc(sizeof(fpkind) * nEquation * SEG_LEN);
-	for (equationID = 1; equationID < nEquation; equationID++){
-		fluxRe[equationID] = &fluxRe[equationID-1][SEG_LEN];
+	if (flux) {
+		fluxRe = (fpkind**)malloc(sizeof(fpkind *) * nEquation);
+		fluxRe[0] = (fpkind *)malloc(sizeof(fpkind) * nEquation * SEG_LEN);
+		for (equationID = 1; equationID < nEquation; equationID++){
+			fluxRe[equationID] = &fluxRe[equationID-1][SEG_LEN];
+		}
 	}
 
 	for (int groupFaceID = 0; groupFaceID < nBoundFace; groupFaceID++){
 		int faceID = BoundFaceGroup[groupFaceID];
 		leftCellofFaceRe[groupFaceID] = leftCellofFace[faceID];
 		rightCellofFaceRe[groupFaceID] = rightCellofFace[faceID];
-		for (int equationID = 0; equationID < nEquation; equationID++){
-			fluxRe[equationID][groupFaceID] = flux[equationID][faceID];
+		if (flux) {
+			for (int equationID = 0; equationID < nEquation; equationID++){
+				fluxRe[equationID][groupFaceID] = flux[equationID][faceID];
+			}
 		}
 	}
 
@@ -1370,8 +1374,10 @@ void reorderFaceVars(){
 		int faceID = InteriorFaceGroup[offset];
 		leftCellofFaceRe[groupFaceID] = leftCellofFace[faceID];
 		rightCellofFaceRe[groupFaceID] = rightCellofFace[faceID];
-		for (int equationID = 0; equationID < nEquation; equationID++){
-			fluxRe[equationID][groupFaceID] = flux[equationID][faceID];
+		if (flux) {
+			for (int equationID = 0; equationID < nEquation; equationID++){
+				fluxRe[equationID][groupFaceID] = flux[equationID][faceID];
+			}
 		}
 	}
 }
