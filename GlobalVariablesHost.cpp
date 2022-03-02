@@ -1,11 +1,16 @@
 #include "stdio.h"
 #include "GlobalVariablesHost.h"
 #include "stdlib.h"
+#include <vector>
+#include <algorithm>
+using namespace std;
 int * bcType; //boundary type array
 int * leftCellofFace; //Topology variable owner
 int * rightCellofFace;//Topology variable neighbour
 int * leftCellofFaceRe; //reorder topology variable owner by face coloring
 int * rightCellofFaceRe;//reorder topology variable neighbour by face coloring
+int * leftCellofFaceNodeRe; //reorder leftCellofFace by face coloring according to nodes
+int * rightCellofFaceNodeRe;//reorder
 int ** cell2Face;
 int ** cell2Cell;
 int ** cell2FaceRe;
@@ -15,8 +20,11 @@ int * leftFaceNumberOfEachCell;
 int * cell2FacePosition;
 int ** leftRightFace;
 int * face2Node; //Topology information, face's nodes
+int * face2NodeNodeRe; //face coloring according to node
 int * nodeNumberOfEachFace; //Topology information, node number owned by a face
+int * nodeNumberOfEachFaceNodeRe; //face coloring according to node
 int * face2NodePosition; //The start position of one face in face2Node
+int * face2NodePositionNodeRe; //face coloring according to node
 int * node2Cell; //Topology information, node's cells
 int * node2CellCount; //The cell-access frequency by a node.
 int * cellNumberOfEachNode; //Topology information, cell number owned by a node
@@ -37,6 +45,14 @@ int * InteriorFaceGroup;
 int * InteriorFaceGroupPosi;
 int * InteriorFaceGroupNum;
 int InteriorFaceColorNum = 0;
+int * BoundFaceNodeGroup; //Coloring faces by nodes
+int * BoundFaceNodeGroupPosi; //The offset of the first face label of one face group in BoundFaceNodeGroup
+int * BoundFaceNodeGroupNum; //the number of every face group (the number of faces in one color) according to node
+int BoundFaceNodeColorNum = 0; //the total number of color (the total number of face groups)
+int * InteriorFaceNodeGroup;
+int * InteriorFaceNodeGroupPosi;
+int * InteriorFaceNodeGroupNum;
+int InteriorFaceNodeColorNum = 0;
 double * xfn;
 double * yfn;
 double * zfn;
@@ -67,9 +83,12 @@ fpkind ** resAVX; //residual by AVX512
 fpkind ** flux; //flux for 5 unkonwns rho, u, v, w, p on faces.
 fpkind ** fluxRe; //reorder flux by face coloring
 fpkind ** qNode;
+fpkind ** qNodeAVX;
 fpkind ** tNode;
+fpkind ** tNodeAVX;
 fpkind * limit;
 int * nCount; //cell number of each node by calculation. what's the difference between nCount and nodeNumberOfEachCell (nCPN)??
+int * nCountAVX; //cell number of each node by calculation. what's the difference between nCount and nodeNumberOfEachCell (nCPN)??
 fpkind * dMin; //local minimum value of q on cells, by calculation
 fpkind * dMax; //local maxmum value of q on cells, by calculation
 fpkind * dMinAVX; //AVX
@@ -234,6 +253,7 @@ void setFaceNumberOfEachNode(){
 			faceNumberOfEachNode[nodeID]++;
 		}
 	}
+	
 }
 void setNode2Face(){
 	if (node2Face) return;
@@ -294,6 +314,12 @@ void readNumberNodeOfEachFace(){
 	nodeNumberOfEachFace = (int *)malloc(nTotalFace * sizeof(int));
 	fread(nodeNumberOfEachFace, sizeof(int), nTotalFace, fileNumberNodeOfEachFace);
 	fclose(fileNumberNodeOfEachFace);
+	//Get the maximum node number in a face
+	int maxNodeNumber = 0;
+	for (int faceID = 0; faceID < nTotalFace; faceID++){
+		if (maxNodeNumber < nodeNumberOfEachFace[faceID]) maxNodeNumber = nodeNumberOfEachFace[faceID];
+	}
+	printf("the maximum node number in a face is %d\n", maxNodeNumber);
 }
 
 void readFace2Node(){
@@ -628,8 +654,11 @@ void mallocQNode(){
 	int nEquation = nl + nchem;
 	qNode = (fpkind **)malloc(sizeof(fpkind *) * nEquation);
 	qNode[0] = (fpkind *)malloc(sizeof(fpkind) * nEquation * nTotalNode);
+	qNodeAVX = (fpkind **)malloc(sizeof(fpkind *) * nEquation);
+	qNodeAVX[0] = (fpkind *)malloc(sizeof(fpkind) * nEquation * nTotalNode);
 	int iEquation;
 	for (iEquation = 1; iEquation < nEquation; iEquation++) qNode[iEquation] = &qNode[iEquation - 1][nTotalNode];
+	for (iEquation = 1; iEquation < nEquation; iEquation++) qNodeAVX[iEquation] = &qNodeAVX[iEquation - 1][nTotalNode];
 }
 
 void setQNodeRandom(){
@@ -658,8 +687,11 @@ void mallocTNode(){
 	}
 	tNode = (fpkind **)malloc(sizeof(fpkind *) * nTemperature);
 	tNode[0] = (fpkind *)malloc(sizeof(fpkind) * nTemperature * nTotalNode);
+	tNodeAVX = (fpkind **)malloc(sizeof(fpkind *) * nTemperature);
+	tNodeAVX[0] = (fpkind *)malloc(sizeof(fpkind) * nTemperature * nTotalNode);
 	int iEquation;
 	for (iEquation = 1; iEquation < nTemperature; iEquation++) tNode[iEquation] = &tNode[iEquation - 1][nTotalNode];
+	for (iEquation = 1; iEquation < nTemperature; iEquation++) tNodeAVX[iEquation] = &tNodeAVX[iEquation - 1][nTotalNode];
 
 }
 
@@ -670,6 +702,7 @@ void mallocNCount(){
 		exit(0);
 	}
 	nCount = (int *)malloc(sizeof(int) * nTotalNode);
+	nCountAVX = (int *)malloc(sizeof(int) * nTotalNode);
 }
 
 void setNode2CellCount(){
@@ -1380,4 +1413,343 @@ void reorderFaceVars(){
 			}
 		}
 	}
+}
+void faceColorByNode(){
+	printf("faceColorByNode\n");
+	printf("nTotalFace = %d, nBoundFace = %d\n", nTotalFace, nBoundFace);
+	int * BoundFaceConflictPosi = (int *)malloc(nBoundFace * sizeof(int));
+        int * BoundFaceConflictNum = (int *)malloc(nBoundFace * sizeof(int));
+        int * InteriorFaceConflictPosi = (int *)malloc((nTotalFace - nBoundFace)*sizeof(int));
+        int * InteriorFaceConflictNum = (int *)malloc((nTotalFace - nBoundFace)*sizeof(int));
+	int sumBoundFaceConflict = 0;
+	int sumInteriorFaceConflict = 0;
+	int le, re;
+	vector<int> faceGroupTmp;
+//find face conflict relationship
+	printf("Boundary conflict\n");
+	for (int i = 0; i < nBoundFace; i++){
+		int numNodes = nodeNumberOfEachFace[i];	
+		int nodePosi = face2NodePosition[i];
+		for (int j = 0; j < numNodes; j++){
+			int nodeID = face2Node[nodePosi + j];
+			int numFaces = faceNumberOfEachNode[nodeID];
+			int facePosi = node2FacePosition[nodeID];
+			for (int k = 0; k < numFaces; k++){
+				int faceID = node2Face[facePosi + k];	
+				if (faceID != i) {
+					vector<int>::iterator it = find(faceGroupTmp.begin(), faceGroupTmp.end(), faceID);
+					if (it == faceGroupTmp.end()) faceGroupTmp.push_back(faceID);
+				}
+			}
+		}
+		BoundFaceConflictPosi[i] = sumBoundFaceConflict;
+		sumBoundFaceConflict += faceGroupTmp.size();
+		faceGroupTmp.clear();
+		//add the number of face in left and right cell, the total number should except itself.
+	}
+
+	printf("Interior conflict, faceGroupTmp.size() = %d, sumBoundFaceConflict = %d\n", faceGroupTmp.size(), sumBoundFaceConflict);
+	for (int i = nBoundFace; i < nTotalFace; i++){
+		int numNodes = nodeNumberOfEachFace[i];	
+		int nodePosi = face2NodePosition[i];
+		for (int j = 0; j < numNodes; j++){
+			int nodeID = face2Node[nodePosi + j];
+			int numFaces = faceNumberOfEachNode[nodeID];
+			int facePosi = node2FacePosition[nodeID];
+			for (int k = 0; k < numFaces; k++){
+				int faceID = node2Face[facePosi + k];	
+				if (faceID != i) {
+					vector<int>::iterator it = find(faceGroupTmp.begin(), faceGroupTmp.end(), faceID);
+					if (it == faceGroupTmp.end()) faceGroupTmp.push_back(faceID);
+				}
+			}
+			if (i == nBoundFace) printf("j = %d, numFaces = %d, nodeID = %d\n", j, numFaces, nodeID);
+		}
+		InteriorFaceConflictPosi[i - nBoundFace] = sumInteriorFaceConflict;
+		//add the number of face in left and right cell, the total number should except itself.
+		sumInteriorFaceConflict += faceGroupTmp.size(); 
+		faceGroupTmp.clear();
+	}
+
+	int * BoundFaceConflict = (int *)malloc(sumBoundFaceConflict*sizeof(int));
+	int * InteriorFaceConflict = (int *)malloc(sumInteriorFaceConflict*sizeof(int));
+
+	printf("Boundary conflict, sumInteriorFaceConflict = %d\n", sumInteriorFaceConflict);
+	for (int i = 0; i < nBoundFace; i++){
+		int numNodes = nodeNumberOfEachFace[i];	
+		int nodePosi = face2NodePosition[i];
+		for (int j = 0; j < numNodes; j++){
+			int nodeID = face2Node[nodePosi + j];
+			int numFaces = faceNumberOfEachNode[nodeID];
+			int facePosi = node2FacePosition[nodeID];
+			for (int k = 0; k < numFaces; k++){
+				int faceID = node2Face[facePosi + k];	
+				if (faceID != i) {
+					vector<int>::iterator it = find(faceGroupTmp.begin(), faceGroupTmp.end(), faceID);
+					if (it == faceGroupTmp.end()) faceGroupTmp.push_back(faceID);
+				}
+			}
+		}
+		//Initializaion of BoundFaceConflictNum
+		BoundFaceConflictNum[i] = faceGroupTmp.size();
+		int facePosi = BoundFaceConflictPosi[i];
+		for (int it = 0; it < faceGroupTmp.size(); it++){
+			BoundFaceConflict[facePosi + it] = faceGroupTmp[it];
+		}
+		/*
+		//for test
+		if (i==0) {
+			printf("facePosi = %d, faceGroupTmp.size() = %d\n", facePosi, faceGroupTmp.size());
+			for (int it = 0; it < faceGroupTmp.size(); it++){
+				printf("it = %d, BoundFaceConflict = %d, faceGroupTmp = %d\n", it, BoundFaceConflict[facePosi + it], faceGroupTmp[it]);
+			}
+		}
+		*/
+		faceGroupTmp.clear();
+	}
+
+	printf("Interior conflict\n");
+	for (int i = nBoundFace; i < nTotalFace; i++){
+		int numNodes = nodeNumberOfEachFace[i];	
+		int nodePosi = face2NodePosition[i];
+		for (int j = 0; j < numNodes; j++){
+			int nodeID = face2Node[nodePosi + j];
+			int numFaces = faceNumberOfEachNode[nodeID];
+			int facePosi = node2FacePosition[nodeID];
+			for (int k = 0; k < numFaces; k++){
+				int faceID = node2Face[facePosi + k];	
+				if (faceID != i) {
+					vector<int>::iterator it = find(faceGroupTmp.begin(), faceGroupTmp.end(), faceID);
+					if (it == faceGroupTmp.end()) faceGroupTmp.push_back(faceID);
+				}
+			}
+		}
+		//Initializaion of InteriorFaceConflictNum
+		int localFace = i - nBoundFace;
+		InteriorFaceConflictNum[localFace] = faceGroupTmp.size();
+		int facePosi = InteriorFaceConflictPosi[localFace];
+		for (int it = 0; it < faceGroupTmp.size(); it++){
+			InteriorFaceConflict[facePosi + it] = faceGroupTmp[it];
+		}
+		faceGroupTmp.clear();
+	}
+	//color conflict faces on boundary
+	int colorMax = 0;
+	BoundFaceNodeGroup = (int *)malloc(nBoundFace*sizeof(int));
+	InteriorFaceNodeGroup = (int *)malloc((nTotalFace - nBoundFace)*sizeof(int));
+	int * faceColor = (int *)malloc(nTotalFace*sizeof(int));
+	for (int i = 0; i < nTotalFace; i++) {
+		//Initialization of faceColor with 0, which means no color
+		faceColor[i] = -1; 
+	}
+
+	for (int i = 0; i < nBoundFace; i++) {
+		int color = 0;
+		int colorSame = 0;
+		while (faceColor[i] == -1) {
+			for (int j = 0; j < BoundFaceConflictNum[i]; j++) {
+				int faceConflict = BoundFaceConflict[BoundFaceConflictPosi[i]+j];
+				if (color == faceColor[faceConflict]) {
+					colorSame = 1;
+					break;				
+				}
+			}
+			if (colorSame == 0) faceColor[i] = color;
+			else {
+				color ++;
+				colorSame = 0;
+			}
+		}
+		//record the maximum color
+		if (faceColor[i] > colorMax) colorMax = faceColor[i];
+	}
+	BoundFaceNodeColorNum = colorMax + 1;
+	printf("Boundary faces own %d colors due to nodes\n", BoundFaceNodeColorNum);
+	BoundFaceNodeGroupNum = (int *)malloc(BoundFaceNodeColorNum*sizeof(int));
+	BoundFaceNodeGroupPosi =(int *)malloc(BoundFaceNodeColorNum*sizeof(int));
+	int * BoundFaceColorOffset = (int *)malloc(BoundFaceNodeColorNum*sizeof(int));
+	BoundFaceNodeGroupPosi[0] = 0;
+	for (int i = 0; i < BoundFaceNodeColorNum; i++){
+		//Initializaiton with zero
+		BoundFaceNodeGroupNum[i] = 0;
+		BoundFaceColorOffset[i] = 0;
+	}
+
+	for (int i = 0; i < nBoundFace; i++) {
+		int color = faceColor[i];
+		BoundFaceNodeGroupNum[color] ++;
+	}
+
+	for (int i = 1; i < BoundFaceNodeColorNum; i++) {
+		BoundFaceNodeGroupPosi[i] = BoundFaceNodeGroupPosi[i-1] + BoundFaceNodeGroupNum[i-1];
+	}
+
+	for (int i = 0; i < BoundFaceNodeColorNum; i++){
+		//Initializaiton with zero
+		BoundFaceColorOffset[i] = 0;
+	}
+
+	for (int i = 0; i < nBoundFace; i++) {
+		int color = faceColor[i];
+		int colorPosi = BoundFaceNodeGroupPosi[color] + BoundFaceColorOffset[color];
+		BoundFaceNodeGroup[colorPosi] = i;
+		BoundFaceColorOffset[color]++;
+	}
+
+	//color conflict faces in interior
+	colorMax = 0; //reset colorMax for interior faces
+	for (int i = 0; i < nTotalFace; i++) {
+		faceColor[i] = -1; 
+	}
+
+	for (int i = nBoundFace; i < nTotalFace; i++) {
+		int color = 0;
+		int colorSame = 0;
+		int localFace = i - nBoundFace;
+		while (faceColor[i] == -1) {
+			for (int j = 0; j < InteriorFaceConflictNum[localFace]; j++) {
+				int faceConflict = InteriorFaceConflict[InteriorFaceConflictPosi[localFace]+j];
+				if (color == faceColor[faceConflict]) {
+					colorSame = 1;
+					break;				
+				}
+			}
+			if (colorSame == 0) faceColor[i] = color;
+			else {
+				color ++;
+				colorSame = 0;
+			}
+		}
+		//record the maximum color
+		if (faceColor[i] > colorMax) colorMax = faceColor[i];
+	}
+	InteriorFaceNodeColorNum = colorMax + 1;
+	printf("The interior faces own %d colors due to node\n", InteriorFaceNodeColorNum);
+	InteriorFaceNodeGroupNum = (int*)malloc(InteriorFaceNodeColorNum*sizeof(int));
+	InteriorFaceNodeGroupPosi = (int*)malloc(InteriorFaceNodeColorNum*sizeof(int));
+	int * InteriorFaceColorOffset = (int*)malloc(InteriorFaceNodeColorNum*sizeof(int));
+	InteriorFaceNodeGroupPosi[0] = 0;
+
+	for (int i = 0; i < InteriorFaceNodeColorNum; i++){
+		//Initializaiton with zero
+		InteriorFaceNodeGroupNum[i] = 0;
+		InteriorFaceColorOffset[i] = 0;
+	}
+
+	for (int i = nBoundFace; i < nTotalFace; i++) {
+		int color = faceColor[i];
+		InteriorFaceNodeGroupNum[color] ++;
+	}
+
+	for (int i = 1; i < InteriorFaceNodeColorNum; i++) {
+		InteriorFaceNodeGroupPosi[i] = InteriorFaceNodeGroupPosi[i-1] + InteriorFaceNodeGroupNum[i-1];
+	}
+	for (int i = 0; i < InteriorFaceNodeColorNum; i++){
+		//Initializaiton with zero
+		InteriorFaceColorOffset[i] = 0;
+	}
+
+	for (int i = nBoundFace; i < nTotalFace; i++) {
+		int color = faceColor[i];
+		int colorPosi = InteriorFaceNodeGroupPosi[color] + InteriorFaceColorOffset[color];
+		InteriorFaceNodeGroup[colorPosi] = i;
+		InteriorFaceColorOffset[color]++;
+	}
+}
+
+void reorderFaceVarsByNode(){
+	int equationID;
+	int nEquation = nl + nchem;
+	leftCellofFaceNodeRe = (int *)malloc(nTotalFace*sizeof(int));
+	rightCellofFaceNodeRe = (int *)malloc(nTotalFace*sizeof(int));
+	nodeNumberOfEachFaceNodeRe = (int *)malloc(nTotalFace*sizeof(int)); //face coloring according to node
+	face2NodePositionNodeRe = (int *)malloc(nTotalFace*sizeof(int)); //face coloring according to node
+	int sumFace2Node = 0;
+	for (int groupFaceID = 0; groupFaceID < nBoundFace; groupFaceID++){
+		int faceID = BoundFaceNodeGroup[groupFaceID];
+		if (faceID > nBoundFace) {
+			printf("Error: groupFaceID = %d, faceID = %d\n", groupFaceID, faceID);
+			exit(1);
+		}
+		leftCellofFaceNodeRe[groupFaceID] = leftCellofFace[faceID];
+		rightCellofFaceNodeRe[groupFaceID] = rightCellofFace[faceID];
+		nodeNumberOfEachFaceNodeRe[groupFaceID] = nodeNumberOfEachFace[faceID];
+		face2NodePositionNodeRe[groupFaceID] = face2NodePosition[faceID];
+		sumFace2Node += nodeNumberOfEachFace[faceID];
+	}
+	
+	for (int groupFaceID = nBoundFace; groupFaceID < nTotalFace; groupFaceID++){
+		int offset = groupFaceID - nBoundFace;
+		int faceID = InteriorFaceNodeGroup[offset];
+		if ((faceID < nBoundFace)||(faceID >= nTotalFace)) {
+			printf("Error: groupFaceID = %d, faceID = %d\n", groupFaceID, faceID);
+			exit(1);
+		}
+		leftCellofFaceNodeRe[groupFaceID] = leftCellofFace[faceID];
+		rightCellofFaceNodeRe[groupFaceID] = rightCellofFace[faceID];
+		nodeNumberOfEachFaceNodeRe[groupFaceID] = nodeNumberOfEachFace[faceID];
+		face2NodePositionNodeRe[groupFaceID] = face2NodePosition[faceID];
+		sumFace2Node += nodeNumberOfEachFace[faceID];
+	}
+	/*
+	face2NodePositionNodeRe[0] = 0;
+	for (int groupFaceID = 1; groupFaceID < nTotalFace; groupFaceID++){
+		face2NodePositionNodeRe[groupFaceID] = face2NodePositionNodeRe[groupFaceID-1]+nodeNumberOfEachFaceNodeRe[groupFaceID-1];
+	}
+	*/
+	/*
+	int numNodes = 0;
+	int iFace;
+	for (iFace = 0; iFace < nTotalFace; iFace++){
+		face2NodePositionNodeRe[iFace] = numNodes;
+		numNodes += nodeNumberOfEachFaceNodeRe[iFace];
+	}
+	*/
+	//face2Node = (int *)malloc(sizeof(int) * numNodes);
+/*	
+	//int * face2NodeNodeRe = (int *)malloc(numNodes * sizeof(int));
+	//int * face2NodeNodeRe = (int *)malloc(sumFace2Node * sizeof(int));
+	for (int groupFaceID = 0; groupFaceID < nBoundFace; groupFaceID++){
+		int faceID = BoundFaceNodeGroup[groupFaceID];
+		int nodePosiOrg = face2NodePosition[faceID];
+		int nodePosiNew = face2NodePositionNodeRe[groupFaceID];
+		
+		int numNode = nodeNumberOfEachFaceNodeRe[groupFaceID];
+		for (int offset = 0; offset < numNode; offset++){
+			face2NodeNodeRe[nodePosiNew + offset] = face2Node[nodePosiOrg + offset];
+		}
+	}
+	for (int groupFaceID = nBoundFace; groupFaceID < nTotalFace; groupFaceID++){
+		int offset = groupFaceID - nBoundFace;
+		int faceID = InteriorFaceNodeGroup[offset];
+		int nodePosiOrg = face2NodePosition[faceID];
+		int nodePosiNew = face2NodePositionNodeRe[groupFaceID];
+		int numNode = nodeNumberOfEachFaceNodeRe[groupFaceID];
+		for (int i = 0; i < numNode; i++){
+			face2NodeNodeRe[nodePosiNew + i] = face2Node[nodePosiOrg + i];
+		}
+	}
+	//check face2NodeNodeRe
+	for (int faceID = 0; faceID < nTotalFace; faceID++){
+		int numNode = nodeNumberOfEachFaceNodeRe[faceID];
+		int nodePosi = face2NodePositionNodeRe[faceID];
+		for (int nodeOffset = 0; nodeOffset < numNode; nodeOffset++){
+			int nodeID = face2NodeNodeRe[nodePosi + nodeOffset];
+			if ((nodeID < 0)||(nodeID >= nTotalNode)) {
+				printf("Error: faceID = %d, numNode = %d, nodePosi = %d, nodeOffset = %d, nodeID = %d\n", faceID, numNode, nodePosi, nodeOffset, nodeID);
+				exit(1);
+			}
+		}
+	}
+	printf("nodeNumberOfEachFaceNodeRe[%d] = %d, face2NodePositionNodeRe[%d] = %d, sumFace2Node = %d\n", nTotalFace-1, nodeNumberOfEachFaceNodeRe[nTotalFace-1], nTotalFace-1, face2NodePositionNodeRe[nTotalFace-1], sumFace2Node);
+	for (int i = 0; i < sumFace2Node; i++){
+		int nodeID = face2NodeNodeRe[i];
+		//int nodeID = face2Node[i];
+		if ((nodeID >= nTotalFace)||(nodeID < 0)){
+			printf("Error, nTotalNode = %d, i = %d, nodeID = %d\n", nTotalNode, i, nodeID);
+			exit(1);
+		}
+	}
+*/
+
 }

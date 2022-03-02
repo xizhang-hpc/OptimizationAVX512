@@ -8,6 +8,8 @@ extern int * leftCellofFace; //Topology information, face's owner cell
 extern int * rightCellofFace;//Topology information face's neighbour cell
 extern int * leftCellofFaceRe; //reorder leftCellofFace by face coloring
 extern int * rightCellofFaceRe;//reorder
+extern int * leftCellofFaceNodeRe; //reorder leftCellofFace by face coloring according to nodes
+extern int * rightCellofFaceNodeRe;//reorder
 extern int ** cell2Face; //Topology information, cell's faces
 extern int ** cell2Cell; //Topology information, cell's cell, they share the same face
 extern int ** cell2FaceRe; //reorder cell2Face's face order, put left faces together and ahead
@@ -17,8 +19,11 @@ extern int * leftFaceNumberOfEachCell; //Topology information, left face number 
 extern int * cell2FacePosition; //Topology information, start position of a cell in cell2Face
 extern int ** leftRightFace; //Topology information, determine a face is a left or right face for a cell
 extern int * face2Node; //Topology information, face's nodes, use with face2NodePosition
+extern int * face2NodeNodeRe; //face coloring according to node
 extern int * nodeNumberOfEachFace; //Topology information, node number owned by a face
+extern int * nodeNumberOfEachFaceNodeRe; //face coloring according to node
 extern int * face2NodePosition; //The start position of one face in face2Node
+extern int * face2NodePositionNodeRe; //face coloring according to node
 extern int * node2Cell; //Topology information, node's cells, use with node2CellPosition
 extern int * cellNumberOfEachNode; //Topology information, cell number owned by a node
 extern int * node2CellPosition; //The start position of one node in node2Cell
@@ -38,6 +43,14 @@ extern int * InteriorFaceGroup;
 extern int * InteriorFaceGroupPosi;
 extern int * InteriorFaceGroupNum;
 extern int InteriorFaceColorNum;
+extern int * BoundFaceNodeGroup; //Coloring faces by nodes
+extern int * BoundFaceNodeGroupPosi; //The offset of the first face label of one face group in BoundFaceNodeGroup
+extern int * BoundFaceNodeGroupNum; //the number of every face group (the number of faces in one color) according to node
+extern int BoundFaceNodeColorNum; //the total number of color (the total number of face groups)
+extern int * InteriorFaceNodeGroup;
+extern int * InteriorFaceNodeGroupPosi;
+extern int * InteriorFaceNodeGroupNum;
+extern int InteriorFaceNodeColorNum;
 extern int * isGhostCell; //Topology information, determine whether or not is a ghost cell.
 extern double * xfn; //Geometry variable, x component of face normal
 extern double * yfn;
@@ -69,9 +82,12 @@ extern fpkind ** resAVX; //residual for ns equations by AVX512
 extern fpkind ** flux; //flux for 5 unkonwns rho, u, v, w, p on faces.
 extern fpkind ** fluxRe; //reorder flux by face coloring
 extern fpkind ** qNode; //qNS on nodes 
+extern fpkind ** qNodeAVX; //qNS on nodes 
 extern fpkind * limit; //limit on faces 
 extern fpkind ** tNode; // temperature on nodes
+extern fpkind ** tNodeAVX; // temperature on nodes
 extern int * nCount; //cell number of each node by calculation. what's the difference between nCount and cellNumberOfEachNode (nCPN)??
+extern int * nCountAVX; //cell number of each node by calculation. what's the difference between nCount and cellNumberOfEachNode (nCPN)??
 extern fpkind * dMin; //local minimum value of q on cells, by calculation
 extern fpkind * dMax; //local maxmum value of q on cells, by calculation
 extern fpkind * dMinAVX; //AVX
@@ -125,5 +141,7 @@ void mallocFlux();
 void setFluxRandom();
 void mallocDMinDMax();
 void faceColor();
+void faceColorByNode();
 void reorderFaceVars();
+void reorderFaceVarsByNode();
 void freeGlobalVariablesHost();

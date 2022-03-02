@@ -22,6 +22,8 @@ void preProcessQTNcountCompInterior(){
 	mallocQNode();
 	mallocTNode();
 	mallocNCount();
+	setFaceNumberOfEachNode();
+	setNode2Face();
 /*
 	//for device variables
 	devAltCpyLeftRightCellofFace();
@@ -44,6 +46,8 @@ void preProcessQTNcountCompInterior(){
 	setNode2CellCount();
 	//devAltCpyNode2CellCount();
 	setCell2NodeCount();
+	faceColorByNode();
+	reorderFaceVarsByNode();
 	//devAltCpyCell2NodeCount();
 	//for test
 	printf("nTotalFace = %d\n", nTotalFace);
