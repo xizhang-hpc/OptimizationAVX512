@@ -188,8 +188,12 @@ void CallHostFaceNCountQNodeTNodeCal(const int loopID){
 	__m256i zmmOffReal;
 	__m256i zmmPosiReal;
 	__m256i zmmNodeID;
+	__m256i zmmNCount;
+	__m256i zmmNCPlusOne;
 	__m256i zmmIndexZero = _mm256_maskz_set1_epi32(0xFF, 0);
 	__m256i zmmMinusOne = _mm256_maskz_set1_epi32(0xFF, -1);
+	__m256i zmmPositiveOne = _mm256_maskz_set1_epi32(0xFF, 1);
+	__m256i zmmPositiveTwo = _mm256_maskz_set1_epi32(0xFF, 2);
 	__m512d zmmZero = _mm512_setzero_pd();
 
 	__m512d zmmQNS;
@@ -376,6 +380,9 @@ void CallHostFaceNCountQNodeTNodeCal(const int loopID){
 					zmmQNode = _mm512_i32gather_pd(zmmNodeID, tNodeAVX[0], 8);
 					zmmAdd = _mm512_mask_add_pd(zmmQNode, kZero, zmmQNS, zmmQNode);
 					_mm512_i32scatter_pd(tNodeAVX[0], zmmNodeID, zmmAdd, 8);
+					zmmNCount = _mm256_mmask_i32gather_epi32(zmmIndexZero, 0xFF, zmmNodeID, nCountAVX, 4);
+					zmmNCPlusOne = _mm256_mask_add_epi32(zmmNCount, kZero, zmmPositiveOne, zmmNCount);
+					_mm256_i32scatter_epi32(nCountAVX, zmmNodeID, zmmNCPlusOne, 4);
 				}
 
 			}
@@ -396,6 +403,9 @@ void CallHostFaceNCountQNodeTNodeCal(const int loopID){
 					zmmQNode = _mm512_i32gather_pd(zmmNodeID, tNodeAVX[0], 8);
 					zmmAdd = _mm512_mask_add_pd(zmmQNode, kZero, zmmQNS, zmmQNode);
 					 _mm512_mask_i32scatter_pd(tNodeAVX[0], kNTail, zmmNodeID, zmmAdd, 8);
+					zmmNCount = _mm256_mmask_i32gather_epi32(zmmIndexZero, kNTail, zmmNodeID, nCountAVX, 4);
+					zmmNCPlusOne = _mm256_mask_add_epi32(zmmNCount, kZero, zmmPositiveOne, zmmNCount);
+					_mm256_mask_i32scatter_epi32(nCountAVX, kNTail, zmmNodeID, zmmNCPlusOne, 4);
 				}
 				
 
@@ -410,9 +420,13 @@ void CallHostFaceNCountQNodeTNodeCal(const int loopID){
 					printf("Error: nBoundFace = %d, faceID = %d, nodeID = %d, tNodeAVX = %.30e, tNode = %.30e\n", nBoundFace, faceID, nodeID, tNodeAVX[0][nodeID], tNode[0][nodeID]);
 					exit(0);
 				}
+				if (abs(nCountAVX[nodeID] - nCount[nodeID]) >  1.0e-12) {
+					printf("Error: nBoundFace = %d, faceID = %d, nodeID = %d, nCountAVX = %.30e, nCount = %.30e\n", nBoundFace, faceID, nodeID, nCountAVX[nodeID], nCount[nodeID]);
+					exit(0);
+				}
 			}
 		}
-		printf("Test AVX512 of tNode on boundary successfully\n");
+		printf("Test AVX512 of tNode and nCount on boundary successfully\n");
     	for (iFace = nBoundFace; iFace < nTotalFace; ++ iFace) {
 	        le = leftCellofFace[iFace];
         	re = rightCellofFace[iFace];
@@ -428,6 +442,80 @@ void CallHostFaceNCountQNodeTNodeCal(const int loopID){
         	    	nCount[point] += 1;
 		}
     	}
+                for (int colorID = 0; colorID < InteriorFaceNodeColorNum; colorID++){
+                        int colorGroupNum = InteriorFaceNodeGroupNum[colorID];
+                        int n_block = (colorGroupNum/N_UNROLL)*N_UNROLL;
+                        int n_tail = colorGroupNum - n_block;
+                        int colorGroupStart = InteriorFaceNodeGroupPosi[colorID] + nBoundFace;
+                        for (int colorGroupID = 0; colorGroupID < n_block; colorGroupID+=N_UNROLL){	
+				zmmLeftCell = _mm256_maskz_loadu_epi32(0xFF, leftCellofFaceNodeRe + colorGroupStart + colorGroupID);
+				zmmRightCell = _mm256_maskz_loadu_epi32(0xFF, rightCellofFaceNodeRe + colorGroupStart + colorGroupID);
+				zmmQNS = _mm512_i32gather_pd(zmmLeftCell, tCell[0], 8);
+				zmmQNSRight = _mm512_i32gather_pd(zmmRightCell, tCell[0], 8);
+				zmmFace2NodePosition = _mm256_maskz_loadu_epi32(0xFF, face2NodePositionNodeRe + colorGroupStart + colorGroupID);
+				zmmNodeNumberOfEachFace = _mm256_maskz_loadu_epi32(0xFF, nodeNumberOfEachFaceNodeRe + colorGroupStart + colorGroupID);
+				for (int offsetNode = 1; offsetNode <= maxNodeNum; offsetNode++){
+					zmmNum = _mm256_maskz_set1_epi32(0xFF, offsetNode);
+					zmmOffset = _mm256_maskz_sub_epi32(0xFF, zmmNodeNumberOfEachFace, zmmNum);
+					kZero = _mm256_cmp_epi32_mask(zmmMinusOne, zmmOffset, _MM_CMPINT_LT);
+	        		        zmmOffReal = _mm256_mask_blend_epi32(kZero, zmmIndexZero, zmmOffset);
+					zmmPosiReal = _mm256_maskz_add_epi32(0xFF, zmmFace2NodePosition, zmmOffReal);
+					//zmmNodeID = _mm256_mmask_i32gather_epi32(zmmIndexZero, 0xFF, zmmPosiReal, face2NodeNodeRe, 4);
+					zmmNodeID = _mm256_mmask_i32gather_epi32(zmmIndexZero, 0xFF, zmmPosiReal, face2Node, 4);
+					zmmQNode = _mm512_i32gather_pd(zmmNodeID, tNodeAVX[0], 8);
+					zmmAdd = _mm512_mask_add_pd(zmmQNode, kZero, zmmQNS, zmmQNode);
+					zmmAdd = _mm512_mask_add_pd(zmmQNode, kZero, zmmQNSRight, zmmAdd);
+					_mm512_i32scatter_pd(tNodeAVX[0], zmmNodeID, zmmAdd, 8);
+					zmmNCount = _mm256_mmask_i32gather_epi32(zmmIndexZero, 0xFF, zmmNodeID, nCountAVX, 4);
+					zmmNCPlusOne = _mm256_mask_add_epi32(zmmNCount, kZero, zmmPositiveTwo, zmmNCount);
+					_mm256_i32scatter_epi32(nCountAVX, zmmNodeID, zmmNCPlusOne, 4);
+				}
+
+			}
+			if (n_tail > 0){
+				__mmask8 kNTail = 0xFF>>(8-n_tail);
+				zmmLeftCell = _mm256_maskz_loadu_epi32(kNTail, leftCellofFaceNodeRe + colorGroupStart + n_block);
+				zmmRightCell = _mm256_maskz_loadu_epi32(kNTail, rightCellofFaceNodeRe + colorGroupStart + n_block);
+				zmmQNS = _mm512_mask_i32gather_pd(zmmZero, kNTail, zmmLeftCell, tCell[0], 8);
+				zmmQNSRight = _mm512_mask_i32gather_pd(zmmZero, kNTail, zmmRightCell, tCell[0], 8);
+				zmmFace2NodePosition = _mm256_maskz_loadu_epi32(kNTail, face2NodePositionNodeRe + colorGroupStart + n_block);
+				zmmNodeNumberOfEachFace = _mm256_maskz_loadu_epi32(kNTail, nodeNumberOfEachFaceNodeRe + colorGroupStart + n_block);
+				for (int offsetNode = 1; offsetNode <= maxNodeNum; offsetNode++){
+					zmmNum = _mm256_maskz_set1_epi32(kNTail, offsetNode);
+					zmmOffset = _mm256_maskz_sub_epi32(kNTail, zmmNodeNumberOfEachFace, zmmNum);
+					kZero = _mm256_cmp_epi32_mask(zmmMinusOne, zmmOffset, _MM_CMPINT_LT);
+	        		        zmmOffReal = _mm256_mask_blend_epi32(kZero, zmmIndexZero, zmmOffset);
+					zmmPosiReal = _mm256_maskz_add_epi32(kNTail, zmmFace2NodePosition, zmmOffReal);
+					//zmmNodeID = _mm256_mmask_i32gather_epi32(zmmIndexZero, 0xFF, zmmPosiReal, face2NodeNodeRe, 4);
+					zmmNodeID = _mm256_mmask_i32gather_epi32(zmmIndexZero, kNTail, zmmPosiReal, face2Node, 4);
+					zmmQNode = _mm512_i32gather_pd(zmmNodeID, tNodeAVX[0], 8);
+					zmmAdd = _mm512_mask_add_pd(zmmQNode, kZero, zmmQNS, zmmQNode);
+					zmmAdd = _mm512_mask_add_pd(zmmQNode, kZero, zmmQNSRight, zmmAdd);
+					 _mm512_mask_i32scatter_pd(tNodeAVX[0], kNTail, zmmNodeID, zmmAdd, 8);
+					zmmNCount = _mm256_mmask_i32gather_epi32(zmmIndexZero, kNTail, zmmNodeID, nCountAVX, 4);
+					zmmNCPlusOne = _mm256_mask_add_epi32(zmmNCount, kZero, zmmPositiveTwo, zmmNCount);
+					_mm256_mask_i32scatter_epi32(nCountAVX, kNTail, zmmNodeID, zmmNCPlusOne, 4);
+				}
+				
+
+			}
+		}
+		for (int faceID = 0; faceID < nTotalFace; faceID++){
+			int nodeNum = nodeNumberOfEachFace[faceID];
+			int nodePosi = face2NodePosition[faceID];
+			for (int offset = 0; offset < nodeNum; offset++){
+				int nodeID = face2Node[nodePosi + offset];
+				if (abs(tNodeAVX[0][nodeID] - tNode[0][nodeID]) >  1.0e-12) {
+					printf("Error: nBoundFace = %d, faceID = %d, nodeID = %d, tNodeAVX = %.30e, tNode = %.30e\n", nBoundFace, faceID, nodeID, tNodeAVX[0][nodeID], tNode[0][nodeID]);
+					exit(0);
+				}
+				if (abs(nCountAVX[nodeID] - nCount[nodeID]) >  1.0e-12) {
+					printf("Error: nBoundFace = %d, faceID = %d, nodeID = %d, nCountAVX = %.30e, nCount = %.30e\n", nBoundFace, faceID, nodeID, nCountAVX[nodeID], nCount[nodeID]);
+					exit(0);
+				}
+			}
+		}
+		printf("Test AVX512 of tNode and nCount on whole faces successfully\n");
 	TIMERCPU1("HostFaceLoopNCQTNodeSep");
 	//Get the average qNode and tNode by dividing nCount
 	HostAverageQNodeTNode(loopID);
