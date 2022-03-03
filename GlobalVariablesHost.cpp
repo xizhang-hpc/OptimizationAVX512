@@ -53,6 +53,10 @@ int * InteriorFaceNodeGroup;
 int * InteriorFaceNodeGroupPosi;
 int * InteriorFaceNodeGroupNum;
 int InteriorFaceNodeColorNum = 0;
+int * CellNodeGroup; //cell coloring by nodes. Cells in a color group will not share the same node.
+int * CellNodeGroupPosi;
+int * CellNodeGroupNum;
+int CellNodeColorNum = 0;
 double * xfn;
 double * yfn;
 double * zfn;
@@ -391,6 +395,11 @@ void readNumberNodeOfEachCell(){
 	fread(&nTotalCell, sizeof(int), 1, fileNumberNodeOfEachCell);
 	nodeNumberOfEachCell = (int *)malloc(sizeof(int) * nTotalCell);
 	fread(nodeNumberOfEachCell, sizeof(int), nTotalCell, fileNumberNodeOfEachCell);
+	int maxNodes = 0;
+	for (int cellID = 0; cellID < nTotalCell; cellID++){
+		if (maxNodes < nodeNumberOfEachCell[cellID]) maxNodes = nodeNumberOfEachCell[cellID];
+	}
+	printf("maxNodes = %d\n", maxNodes);
 	fclose(fileNumberNodeOfEachCell);
 }
 
@@ -1751,5 +1760,180 @@ void reorderFaceVarsByNode(){
 		}
 	}
 */
+
+}
+
+void cellColorByNode(){
+	printf("cellColorByNode\n");
+	printf("nTotalCell = %d\n", nTotalCell);
+	int * CellConflictPosi = (int *)malloc(nTotalCell * sizeof(int));
+        int * CellConflictNum = (int *)malloc(nTotalCell * sizeof(int));
+	int sumCellConflict = 0;
+	vector<int> cellGroupTmp;
+//find cell conflict relationship
+	for (int cellID = 0; cellID < nTotalCell; cellID++){
+		int numNodes = nodeNumberOfEachCell[cellID];
+		int nodePosi = cell2NodePosition[cellID];
+		for (int nodeOffset = 0; nodeOffset < numNodes; nodeOffset++){
+			int nodeID = cell2Node[nodePosi + nodeOffset];
+			int numCells =  cellNumberOfEachNode[nodeID];
+			int cellPosi = node2CellPosition[nodeID];
+			for (int cellOffset = 0; cellOffset < numCells; cellOffset++){
+				int cellNodeID = node2Cell[cellPosi + cellOffset];
+				/*
+				if (cellNodeID > nTotalCell) {
+					printf("Error: cellID = %d, numNodes = %d, nodeID = %d, numCells = %d, cellNodeID = %d\n", cellID, numNodes, nodeID, numCells, cellNodeID);
+					exit(1);
+				}
+				*/
+				if ((cellNodeID != cellID)&&(cellNodeID < nTotalCell)) {
+					vector<int>::iterator it = find(cellGroupTmp.begin(), cellGroupTmp.end(), cellNodeID);
+					if (it == cellGroupTmp.end()) cellGroupTmp.push_back(cellNodeID);
+				}
+				
+			}
+		}
+		CellConflictPosi[cellID] = sumCellConflict;
+		sumCellConflict += cellGroupTmp.size();
+		CellConflictNum[cellID] = cellGroupTmp.size();
+		cellGroupTmp.clear();
+
+	}
+
+	int * CellConflict = (int *)malloc(sumCellConflict * sizeof(int));
+
+	for (int cellID = 0; cellID < nTotalCell; cellID++){
+		int numNodes = nodeNumberOfEachCell[cellID];
+		int nodePosi = cell2NodePosition[cellID];
+		for (int nodeOffset = 0; nodeOffset < numNodes; nodeOffset++){
+			int nodeID = cell2Node[nodePosi + nodeOffset];
+			int numCells =  cellNumberOfEachNode[nodeID];
+			int cellPosi = node2CellPosition[nodeID];
+			for (int cellOffset = 0; cellOffset < numCells; cellOffset++){
+				int cellNodeID = node2Cell[cellPosi + cellOffset];
+				if ((cellNodeID != cellID)&&(cellNodeID < nTotalCell)) {
+					vector<int>::iterator it = find(cellGroupTmp.begin(), cellGroupTmp.end(), cellNodeID);
+					if (it == cellGroupTmp.end()) cellGroupTmp.push_back(cellNodeID);
+				}
+				
+			}
+		}
+
+		int cellPosi = CellConflictPosi[cellID];
+		for (int it = 0; it < cellGroupTmp.size(); it++){
+			CellConflict[cellPosi + it] = cellGroupTmp[it];
+		}
+		cellGroupTmp.clear();
+
+	}
+	//check
+	for (int i = 0; i < sumCellConflict; i++){
+		int cellID = CellConflict[i];
+		if (cellID >= nTotalCell) {
+			printf("i = %d, cellID = %d\n", i ,cellID);
+			exit(1);
+		}
+	}
+	//color conflict faces on boundary
+	int colorMax = 0;
+	CellNodeGroup = (int *)malloc(nTotalCell*sizeof(int));
+	int * cellColor = (int *)malloc(nTotalCell*sizeof(int));
+	for (int i = 0; i < nTotalCell; i++) {
+		//Initialization of faceColor with 0, which means no color
+		cellColor[i] = -1; 
+	}
+	for (int i = 0; i < nTotalCell; i++) {
+		int color = 0;
+		int colorSame = 0;
+		/*
+		printf("i = %d, nTotalCell = %d, CellConflictNum = %d, CellConflictPosi = %d, sumCellConflict = %d\n", i, nTotalCell, CellConflictNum[i], CellConflictPosi[i], sumCellConflict);
+		for (int j = 0; j < CellConflictNum[i]; j++) {
+			int cellConflictID = CellConflict[CellConflictPosi[i]+j];
+			printf("%d, ", cellConflictID);
+		}
+		printf("\n");
+		*/
+		
+		while (cellColor[i] == -1) {
+			for (int j = 0; j < CellConflictNum[i]; j++) {
+				int cellConflictID = CellConflict[CellConflictPosi[i]+j];
+				if (color == cellColor[cellConflictID]) {
+					colorSame = 1;
+					break;				
+				}
+			}
+			if (colorSame == 0) cellColor[i] = color;
+			else {
+				color ++;
+				colorSame = 0;
+			}
+		}
+		//record the maximum color
+		if (cellColor[i] > colorMax) colorMax = cellColor[i];
+		//printf("i = %d, cellColor = %d\n", i, cellColor[i]);
+	}
+	CellNodeColorNum = colorMax + 1;
+	printf("Cells  own %d colors due to nodes\n", CellNodeColorNum);
+	
+	CellNodeGroupNum = (int *)malloc(CellNodeColorNum*sizeof(int));
+	CellNodeGroupPosi =(int *)malloc(CellNodeColorNum*sizeof(int));
+	int * CellColorOffset = (int *)malloc(CellNodeColorNum*sizeof(int));
+	CellNodeGroupPosi[0] = 0;
+	for (int i = 0; i < CellNodeColorNum; i++){
+		//Initializaiton with zero
+		CellNodeGroupNum[i] = 0;
+		CellColorOffset[i] = 0;
+	}
+
+	for (int i = 0; i < nTotalCell; i++) {
+		int color = cellColor[i];
+		CellNodeGroupNum[color] ++;
+	}
+
+	for (int i = 1; i < CellNodeColorNum; i++) {
+		CellNodeGroupPosi[i] = CellNodeGroupPosi[i-1] + CellNodeGroupNum[i-1];
+	}
+
+	for (int i = 0; i < CellNodeColorNum; i++){
+		//Initializaiton with zero
+		CellColorOffset[i] = 0;
+	}
+
+	for (int i = 0; i < nTotalCell; i++) {
+		int color = cellColor[i];
+		int colorPosi = CellNodeGroupPosi[color] + CellColorOffset[color];
+		CellNodeGroup[colorPosi] = i;
+		CellColorOffset[color]++;
+	}
+	//check cell coloring results
+	int * colorCellNum = (int *)malloc(nTotalCell * sizeof(int));
+	for (int cellID = 0; cellID < nTotalCell; cellID++){
+		colorCellNum[cellID] = 0;
+	}
+	for (int colorID = 0; colorID < CellNodeColorNum; colorID++){
+		int colorPosi = CellNodeGroupPosi[colorID];
+		int groupNum = CellNodeGroupNum[colorID];
+		for (int offset = 0; offset < groupNum; offset++){
+			int cellID = CellNodeGroup[colorPosi + offset];
+			colorCellNum[cellID] += 1;
+			if ((cellID < 0)||(cellID >= nTotalCell)){
+				printf("Error: colorID = %d, offset = %d, cellID = %d\n", colorID, offset, cellID);
+				exit(1);
+			}
+		}
+	}
+	
+	for (int cellID = 0; cellID < nTotalCell; cellID++){
+		if (colorCellNum[cellID] != 1) {
+			printf("Error, cellID = %d, colorCellNum = %d\n", cellID, colorCellNum[cellID]);
+			exit(0);
+		}
+	}
+
+	free(CellConflict);
+	free(CellConflictPosi);
+	free(CellConflictNum);
+	free(colorCellNum);
+
 
 }

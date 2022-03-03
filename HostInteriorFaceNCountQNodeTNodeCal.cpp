@@ -270,15 +270,12 @@ void CallHostNodeLoopNCountQNodeTNodeCalFinal(const int loopID){
 	int cellPosition, numCellsInNode, cellOffset, cellID;
 	int nodeID;
 	int nEquation = nl + nchem;		
-	TIMERCPU0("HostNodeLoopNCQTNodeFinal", "node loop for NCQTNode with computing nCount");
+	TIMERCPU0("HostNodeLoopNCQTNodeFinalWhole", "Whole node loop for NCQTNode with computing nCount");
     	for (nodeID = 0; nodeID < nTotalNode; nodeID++) {
 		cellPosition = node2CellPosition[nodeID];
 		numCellsInNode = cellNumberOfEachNode[nodeID];
 		for (cellOffset = 0; cellOffset < numCellsInNode; cellOffset++){
 			cellID = node2Cell[cellPosition + cellOffset];
-			//add for test
-				//if ((nodeID == 44512)&&(loopID == 0)) printf("nodeID = %d, cellID = %d, tCell = %.30e\n", nodeID, cellID, tCell[0][cellID]);
-			//add end
             		for (int m = 0; m < nEquation; m++) {
 	        		qNode[m][nodeID] += qNS[m][cellID] * node2CellCount[cellPosition + cellOffset];
         		}            
@@ -286,9 +283,30 @@ void CallHostNodeLoopNCountQNodeTNodeCalFinal(const int loopID){
             		nCount[nodeID] += 1 * node2CellCount[cellPosition + cellOffset];
 		}
     	}
-	TIMERCPU1("HostNodeLoopNCQTNodeFinal");
+	TIMERCPU1("HostNodeLoopNCQTNodeFinalWhole");
+	TIMERCPU0("HostNodeLoopNCQTNodeFinalSep", "Sep node loop for NCQTNode with computing nCount");
+        for (int m = 0; m < nEquation; m++) {
+    		for (nodeID = 0; nodeID < nTotalNode; nodeID++) {
+			cellPosition = node2CellPosition[nodeID];
+			numCellsInNode = cellNumberOfEachNode[nodeID];
+			for (cellOffset = 0; cellOffset < numCellsInNode; cellOffset++){
+				cellID = node2Cell[cellPosition + cellOffset];
+	        		qNode[m][nodeID] += qNS[m][cellID] * node2CellCount[cellPosition + cellOffset];
+        		}            
+		}
+    	}
+    	for (nodeID = 0; nodeID < nTotalNode; nodeID++) {
+		cellPosition = node2CellPosition[nodeID];
+		numCellsInNode = cellNumberOfEachNode[nodeID];
+		for (cellOffset = 0; cellOffset < numCellsInNode; cellOffset++){
+			cellID = node2Cell[cellPosition + cellOffset];
+            		tNode[0][nodeID] += tCell[0][cellID] * node2CellCount[cellPosition + cellOffset];
+            		nCount[nodeID] += 1 * node2CellCount[cellPosition + cellOffset];
+		}
+    	}
+	TIMERCPU1("HostNodeLoopNCQTNodeFinalSep");
 	//Get the average qNode and tNode by dividing nCount
-	HostAverageQNodeTNode(loopID);
+	//HostAverageQNodeTNode(loopID);
 }
 
 void CallHostCellLoopNCountQNodeTNodeCal(const int loopID){
@@ -324,7 +342,7 @@ void CallHostCellLoopNCountQNodeTNodeCalFinal(const int loopID){
 	int nodeID;
 	int accessFrequency;
 	int nEquation = nl + nchem;		
-	TIMERCPU0("HostCellLoopNCQTNodeFinal", "cell loop for NCQTNode with computing nCount");
+	TIMERCPU0("HostCellLoopNCQTNodeFinalWhole", "Whole cell loop for NCQTNode with computing nCount");
     	for (cellID = 0; cellID < nTotalCell; cellID++) {
 		nodePosition = cell2NodePosition[cellID];
 		numNodesInCell = nodeNumberOfEachCell[cellID];
@@ -339,7 +357,48 @@ void CallHostCellLoopNCountQNodeTNodeCalFinal(const int loopID){
             		nCount[nodeID] += 1 * accessFrequency;
 		}
     	}
-	TIMERCPU1("HostCellLoopNCQTNodeFinal");
+	TIMERCPU1("HostCellLoopNCQTNodeFinalWhole");
+	TIMERCPU0("HostCellLoopNCQTNodeFinalSep", "Sep cell loop for NCQTNode with computing nCount");
+        for (int m = 0; m < nEquation; m++) {
+    		for (cellID = 0; cellID < nTotalCell; cellID++) {
+			nodePosition = cell2NodePosition[cellID];
+			numNodesInCell = nodeNumberOfEachCell[cellID];
+			for (nodeOffset = 0; nodeOffset < numNodesInCell; nodeOffset++){
+				nodeID = cell2Node[nodePosition + nodeOffset];
+				accessFrequency = cell2NodeCount[nodePosition + nodeOffset];
+
+	        		qNode[m][nodeID] += qNS[m][cellID] * accessFrequency;
+        		}            
+		}
+    	}
+	//for AVX512
+	int maxNodes = 8;
+	__m256i zmmNodePosi;
+	__m256i zmmNodeNum;
+	for (int equationID = 0; equationID < nEquation; equationID++){
+		for (int colorID = 0; colorID < CellNodeColorNum; colorID++){
+			int colorGroupNum = CellNodeGroupNum[colorID];
+			int n_block = (colorGroupNum/N_UNROLL)*N_UNROLL;
+			int n_tail = colorGroupNum - n_block;
+			int colorPosi = CellNodeGroupPosi[colorID];
+			for (int offset = 0; offset < n_tail; offset+=N_UNROLL){
+				
+			}
+
+		}
+	}
+    	for (cellID = 0; cellID < nTotalCell; cellID++) {
+		nodePosition = cell2NodePosition[cellID];
+		numNodesInCell = nodeNumberOfEachCell[cellID];
+		for (nodeOffset = 0; nodeOffset < numNodesInCell; nodeOffset++){
+			nodeID = cell2Node[nodePosition + nodeOffset];
+			accessFrequency = cell2NodeCount[nodePosition + nodeOffset];
+
+            		tNode[0][nodeID] += tCell[0][cellID] * accessFrequency;
+            		nCount[nodeID] += 1 * accessFrequency;
+		}
+    	}
+	TIMERCPU1("HostCellLoopNCQTNodeFinalSep");
 	//Get the average qNode and tNode by dividing nCount
-	HostAverageQNodeTNode(loopID);
+	//HostAverageQNodeTNode(loopID);
 }

@@ -51,6 +51,10 @@ extern int * InteriorFaceNodeGroup;
 extern int * InteriorFaceNodeGroupPosi;
 extern int * InteriorFaceNodeGroupNum;
 extern int InteriorFaceNodeColorNum;
+extern int * CellNodeGroup; //cell coloring by nodes. Cells in a color group will not share the same node.
+extern int * CellNodeGroupPosi;
+extern int * CellNodeGroupNum;
+extern int CellNodeColorNum;
 extern int * isGhostCell; //Topology information, determine whether or not is a ghost cell.
 extern double * xfn; //Geometry variable, x component of face normal
 extern double * yfn;
@@ -142,6 +146,7 @@ void setFluxRandom();
 void mallocDMinDMax();
 void faceColor();
 void faceColorByNode();
+void cellColorByNode();
 void reorderFaceVars();
 void reorderFaceVarsByNode();
 void freeGlobalVariablesHost();

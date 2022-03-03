@@ -49,6 +49,7 @@ void preProcessQTNcountCompInterior(){
 	setCell2NodeCount();
 	faceColorByNode();
 	reorderFaceVarsByNode();
+	cellColorByNode();
 	//devAltCpyCell2NodeCount();
 	//for test
 	printf("nTotalFace = %d\n", nTotalFace);
