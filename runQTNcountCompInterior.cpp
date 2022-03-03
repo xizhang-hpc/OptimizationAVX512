@@ -2,6 +2,7 @@
 #include "stdlib.h"
 #include "runQTNcountCompInterior.h"
 #include "HostInteriorFaceNCountQNodeTNodeCal.h"
+#include "AVX512Interpolation.h"
 #include "GlobalVariablesHost.h"
 #include "constantVars.hxx"
 //#include "Validation.h"
@@ -78,13 +79,14 @@ void runQTNcountCompInterior(){
 		
 	preProcessQTNcountCompInterior();
 	int loopID;
-	int loopNum = 1;
+	int loopNum = 1000;
 	for (loopID = 0; loopID < loopNum; loopID++){
 	//for (loopID = 0; loopID < 10; loopID++){
 		if ( loopID % (LOOPNUM/10) == 0) printf("%.4f%%\n", (float)(loopID*100.0/LOOPNUM));
 		//CallHostNodeLoopNCountQNodeTNodeCalFinal(loopID);
 		CallHostCellLoopNCountQNodeTNodeCalFinal(loopID);
 		CallHostFaceNCountQNodeTNodeCal(loopID);
+		AVX512FaceLoopSepInterpolation(loopID);
 	}
 	
 }
