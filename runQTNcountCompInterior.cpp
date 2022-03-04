@@ -81,14 +81,15 @@ void runQTNcountCompInterior(){
 		
 	preProcessQTNcountCompInterior();
 	int loopID;
-	int loopNum = 1;
+	int loopNum = 1000;
 	for (loopID = 0; loopID < loopNum; loopID++){
 	//for (loopID = 0; loopID < 10; loopID++){
-		if ( loopID % (LOOPNUM/10) == 0) printf("%.4f%%\n", (float)(loopID*100.0/LOOPNUM));
+		if ( loopID % (loopNum/10) == 0) printf("%.4f%%\n", (float)(loopID*100.0/loopNum));
 		//CallHostNodeLoopNCountQNodeTNodeCalFinal(loopID);
 		CallHostCellLoopNCountQNodeTNodeCalFinal(loopID);
-		//CallHostFaceNCountQNodeTNodeCal(loopID);
-		//AVX512FaceLoopSepInterpolation(loopID);
+		AVX512CellLoopSepInterpolation(loopID);
+		CallHostFaceNCountQNodeTNodeCal(loopID);
+		AVX512FaceLoopSepInterpolation(loopID);
 	}
 	
 }
