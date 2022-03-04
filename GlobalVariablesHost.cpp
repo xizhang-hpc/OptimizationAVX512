@@ -31,8 +31,11 @@ int * cellNumberOfEachNode; //Topology information, cell number owned by a node
 int * node2CellPosition; 
 int * cell2Node; //Topology information, cell's nodes
 int * cell2NodeCount; //The cell-access frequency by a node, sorted by cell.
+fpkind * cell2NodeCountRe; //The cell-access frequency by a node, sorted by cell.
 int * nodeNumberOfEachCell; //Topology information, node number owned by a cell
+int * nodeNumberOfEachCellRe; //Topology information, node number owned by a cell
 int * cell2NodePosition; //The start position of one cell in cell2Node
+int * cell2NodePositionRe; //The start position of one cell in cell2Node
 int * node2Face;
 int * faceNumberOfEachNode;
 int * node2FacePosition;
@@ -72,6 +75,7 @@ double * xcc;
 double * ycc;
 double * zcc;
 fpkind ** qNS;
+fpkind ** qNSRe;
 fpkind ** qNSL;
 fpkind ** qNSR;
 fpkind ** qNSLOrg;
@@ -1936,4 +1940,36 @@ void cellColorByNode(){
 	free(colorCellNum);
 
 
+}
+void reorderCellVarsByNode(){
+	nodeNumberOfEachCellRe = (int *)malloc(nTotalCell * sizeof(int));
+	cell2NodePositionRe = (int *)malloc(nTotalCell * sizeof(int));
+	int nEquation = nl + nchem;
+	int nTotal = nTotalCell + nBoundFace;
+	//allocate memory for qNS
+	qNSRe = (fpkind **)malloc(sizeof(fpkind*)*nl);
+	qNSRe[0] = (fpkind *)malloc(sizeof(fpkind)*nl*nTotalCell);
+	for (int equationID = 1; equationID < nl; equationID++){
+		qNSRe[equationID] = &qNSRe[equationID-1][nTotalCell];
+	}
+	//reorder variables by cell coloring
+	for (int colorCellID = 0; colorCellID < nTotalCell; colorCellID++){
+		int cellIDOrg = CellNodeGroup[colorCellID];
+		nodeNumberOfEachCellRe[colorCellID] = nodeNumberOfEachCell[cellIDOrg];
+		cell2NodePositionRe[colorCellID] = cell2NodePosition[cellIDOrg];
+		for (int equationID = 0; equationID < nEquation; equationID++){
+			qNSRe[equationID][colorCellID] = qNS[equationID][cellIDOrg];
+		}
+	}		
+
+	int numNodes = 0;
+	for (int cellID = 0; cellID < nTotalCell; cellID ++){
+		numNodes += nodeNumberOfEachCell[cellID];
+	}
+	size_t sizeNodes = numNodes * sizeof(fpkind);
+	cell2NodeCountRe = (fpkind *)malloc(sizeNodes);
+	for (int countID = 0; countID < numNodes; countID++){
+		cell2NodeCountRe[countID] = (fpkind)cell2NodeCount[countID];
+	}
+	
 }

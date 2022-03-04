@@ -30,8 +30,11 @@ extern int * node2CellPosition; //The start position of one node in node2Cell
 extern int * node2CellCount; //The cell-access frequency by a node. Or how many nodes are owned by a cell.
 extern int * cell2Node; //Topology information, cell's nodes
 extern int * cell2NodeCount; //The cell-access frequency by a node, sorted by cell.
+extern fpkind * cell2NodeCountRe; //The cell-access frequency by a node, sorted by cell.
 extern int * nodeNumberOfEachCell; //Topology information, node number owned by a cell
+extern int * nodeNumberOfEachCellRe; //reorder of nodeNumberOfEachCell by cell coloring
 extern int * cell2NodePosition; //The start position of one cell in cell2Node
+extern int * cell2NodePositionRe; //reorder of cell2NodePosition by cell coloring
 extern int * node2Face; //Topology information, node's faces
 extern int * faceNumberOfEachNode; //Topology information, face number owned by a node
 extern int * node2FacePosition; //Topology information, start position of face by a node
@@ -71,6 +74,7 @@ extern double * xcc; //cell center y component
 extern double * ycc;
 extern double * zcc;
 extern fpkind ** qNS; //rho, u, v, w, p
+extern fpkind ** qNSRe; //reorder of qNS by cell coloring
 extern fpkind ** qNSL; //qNS on left cell of a face
 extern fpkind ** qNSR; //qNS on right cell of a face
 extern fpkind ** qNSLOrg; //get qNSL for a new host function
@@ -149,4 +153,5 @@ void faceColorByNode();
 void cellColorByNode();
 void reorderFaceVars();
 void reorderFaceVarsByNode();
+void reorderCellVarsByNode();
 void freeGlobalVariablesHost();

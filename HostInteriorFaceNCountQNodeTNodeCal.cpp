@@ -358,6 +358,7 @@ void CallHostCellLoopNCountQNodeTNodeCalFinal(const int loopID){
 		}
     	}
 	TIMERCPU1("HostCellLoopNCQTNodeFinalWhole");
+	initNCountQNodeTNodeZero(loopID);
 	TIMERCPU0("HostCellLoopNCQTNodeFinalSep", "Sep cell loop for NCQTNode with computing nCount");
         for (int m = 0; m < nEquation; m++) {
     		for (cellID = 0; cellID < nTotalCell; cellID++) {
@@ -373,20 +374,81 @@ void CallHostCellLoopNCountQNodeTNodeCalFinal(const int loopID){
     	}
 	//for AVX512
 	int maxNodes = 8;
+	//int maxNodes = 1;
 	__m256i zmmNodePosi;
-	__m256i zmmNodeNum;
+	__m256i zmmNodeNumberOfEachFace;
+	__m256i zmmNum;
+	__m256i zmmOffset;
+	__m256i zmmOffReal;
+	__m256i zmmPosiReal;
+	__m256i zmmNodeID;
+	__m256i zmmMinusOne = _mm256_maskz_set1_epi32(0xFF, -1);
+	__m256i zmmIndexZero = _mm256_maskz_set1_epi32(0xFF, 0);
+
+	__m512d zmmQNS;
+	__m512d zmmAccessFrequency;
+	__m512d zmmQNode;
+	__m512d zmmFmad;
+
+	__mmask8 kZero;
+	__mmask8 kNTail;
+	initNCountQNodeTNodeAVXZero(loopID);
 	for (int equationID = 0; equationID < nEquation; equationID++){
 		for (int colorID = 0; colorID < CellNodeColorNum; colorID++){
 			int colorGroupNum = CellNodeGroupNum[colorID];
 			int n_block = (colorGroupNum/N_UNROLL)*N_UNROLL;
 			int n_tail = colorGroupNum - n_block;
-			int colorPosi = CellNodeGroupPosi[colorID];
-			for (int offset = 0; offset < n_tail; offset+=N_UNROLL){
-				
+			int colorGroupStart = CellNodeGroupPosi[colorID];
+			for (int colorGroupID = 0; colorGroupID < n_block; colorGroupID+=N_UNROLL){
+				zmmNodePosi = _mm256_maskz_loadu_epi32(0xFF, cell2NodePositionRe + colorGroupStart + colorGroupID);
+				zmmNodeNumberOfEachFace = _mm256_maskz_loadu_epi32(0xFF, nodeNumberOfEachCellRe + colorGroupStart + colorGroupID);
+				zmmQNS = _mm512_loadu_pd(qNSRe[equationID]+ colorGroupStart + colorGroupID);
+				for (int offsetNode = 1; offsetNode <= maxNodes; offsetNode++){
+					zmmNum = _mm256_maskz_set1_epi32(0xFF, offsetNode);
+					zmmOffset = _mm256_maskz_sub_epi32(0xFF, zmmNodeNumberOfEachFace, zmmNum);
+					kZero = _mm256_cmp_epi32_mask(zmmMinusOne, zmmOffset, _MM_CMPINT_LT);
+					zmmOffReal = _mm256_mask_blend_epi32(kZero, zmmIndexZero, zmmOffset);
+					zmmPosiReal = _mm256_maskz_add_epi32(0xFF, zmmNodePosi, zmmOffReal);
+					zmmNodeID = _mm256_mmask_i32gather_epi32(zmmIndexZero, 0xFF, zmmPosiReal, cell2Node, 4);
+					zmmAccessFrequency = _mm512_i32gather_pd(zmmPosiReal, cell2NodeCountRe, 8);
+					zmmQNode = _mm512_i32gather_pd(zmmNodeID, qNodeAVX[equationID], 8);
+					zmmFmad = _mm512_mask3_fmadd_pd(zmmQNS, zmmAccessFrequency, zmmQNode, kZero);
+					_mm512_i32scatter_pd(qNodeAVX[equationID], zmmNodeID, zmmFmad, 8);
+				}
 			}
+			if (n_tail > 0){
+				kNTail = 0xFF>>(8-n_tail);
+				zmmNodePosi = _mm256_maskz_loadu_epi32(kNTail, cell2NodePositionRe + colorGroupStart + n_block);
+				zmmNodeNumberOfEachFace = _mm256_maskz_loadu_epi32(kNTail, nodeNumberOfEachCellRe + colorGroupStart + n_block);
+				zmmQNS = _mm512_maskz_loadu_pd(kNTail, qNSRe[equationID]+ colorGroupStart + n_block);
+				for (int offsetNode = 1; offsetNode <= maxNodes; offsetNode++){
+					zmmNum = _mm256_maskz_set1_epi32(kNTail, offsetNode);
+					zmmOffset = _mm256_maskz_sub_epi32(kNTail, zmmNodeNumberOfEachFace, zmmNum);
+					kZero = _mm256_cmp_epi32_mask(zmmMinusOne, zmmOffset, _MM_CMPINT_LT);
+					zmmOffReal = _mm256_mask_blend_epi32(kZero, zmmIndexZero, zmmOffset);
+					zmmPosiReal = _mm256_maskz_add_epi32(kNTail, zmmNodePosi, zmmOffReal);
+					zmmNodeID = _mm256_mmask_i32gather_epi32(zmmIndexZero, kNTail, zmmPosiReal, cell2Node, 4);
+					zmmAccessFrequency = _mm512_i32gather_pd(zmmPosiReal, cell2NodeCountRe, 8);
+					zmmQNode = _mm512_i32gather_pd(zmmNodeID, qNodeAVX[equationID], 8);
+					zmmFmad = _mm512_mask3_fmadd_pd(zmmQNS, zmmAccessFrequency, zmmQNode, kZero);
+					_mm512_mask_i32scatter_pd(qNodeAVX[equationID], kNTail, zmmNodeID, zmmFmad, 8);
 
+				}
+			}
 		}
 	}
+	//validate
+	for (int nodeID = 0; nodeID < nTotalNode; nodeID++){
+		for (int equationID = 0; equationID < nEquation; equationID++){
+			if (abs(qNodeAVX[equationID][nodeID] - qNode[equationID][nodeID])>1.0e-12)
+			{
+				printf("Error: nodeID = %d, equationID = %d, qNodeAVX = %.30e, qNode = %.30e\n", nodeID, equationID, qNodeAVX[equationID][nodeID], qNode[equationID][nodeID]);
+				exit(1);
+			
+			}
+		}
+	}
+	printf("Test qNode successfully\n");
     	for (cellID = 0; cellID < nTotalCell; cellID++) {
 		nodePosition = cell2NodePosition[cellID];
 		numNodesInCell = nodeNumberOfEachCell[cellID];
