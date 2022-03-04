@@ -9,9 +9,9 @@ void runLocalMinMax(){
 	int loopNum = 1000;
 	for (loopID = 0; loopID < loopNum; loopID++){
 		HostFaceLoopLocalMinMax(loopID);
-		HostCellLoopLocalMinMax(loopID);
 		AVX512FaceLoopLocalMinMax(loopID);
 		AVX512FaceLoopLocalMinMaxReOpt(loopID);
+		HostCellLoopLocalMinMax(loopID);
 		AVX512CellLoopLocalMinMax(loopID);
 	}
 }

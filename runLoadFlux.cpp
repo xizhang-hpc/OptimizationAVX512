@@ -15,17 +15,18 @@ void runLoadFlux(){
 		localStart = 0;
 	    	do
  		{   
-        		localEnd = localStart + SEG_LEN;
+        		//localEnd = localStart + SEG_LEN;
+        		localEnd = localStart + nTotalFace;
 		        if (localEnd > nTotalFace) {   
 		        	localEnd = nTotalFace;
         		}       
 			HostFaceLoopLoadFlux(localStart, localEnd, loopID);
 			AVX512FaceLoopLoadFluxOutside(loopID);
-			AVX512FaceLoopLoadFluxInside(loopID);
-			AVX512FaceLoopLoadFluxInsideReOpt(loopID);
+			//AVX512FaceLoopLoadFluxInside(loopID);
+			//AVX512FaceLoopLoadFluxInsideReOpt(loopID);
 			AVX512FaceLoopLoadFluxOutsideReOpt(loopID);
-			//HostCellLoopLoadFlux(loopID);
-			//AVX512CellLoopLoadFluxOutside(loopID);
+			HostCellLoopLoadFlux(loopID);
+			AVX512CellLoopLoadFluxOutside(loopID);
 			//AVX512CellLoopLoadFluxInside(loopID);
 			localStart = localEnd;
 	    	} while (localStart < nTotalFace);
