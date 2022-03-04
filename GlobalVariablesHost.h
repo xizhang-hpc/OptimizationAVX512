@@ -30,7 +30,8 @@ extern int * node2CellPosition; //The start position of one node in node2Cell
 extern int * node2CellCount; //The cell-access frequency by a node. Or how many nodes are owned by a cell.
 extern int * cell2Node; //Topology information, cell's nodes
 extern int * cell2NodeCount; //The cell-access frequency by a node, sorted by cell.
-extern fpkind * cell2NodeCountRe; //The cell-access frequency by a node, sorted by cell.
+extern int * cell2NodeCountIntRe; //int type is usded for cell loop AVX512 __m256i data, also with cell coloring order
+extern fpkind * cell2NodeCountRe; //fpkind type is used for face loop AVX512 __m512d data, also with cell coloring order
 extern int * nodeNumberOfEachCell; //Topology information, node number owned by a cell
 extern int * nodeNumberOfEachCellRe; //reorder of nodeNumberOfEachCell by cell coloring
 extern int * cell2NodePosition; //The start position of one cell in cell2Node
@@ -84,6 +85,7 @@ extern fpkind ** dqdx;
 extern fpkind ** dqdy;
 extern fpkind ** dqdz;
 extern fpkind ** tCell; //temperature on cells
+extern fpkind ** tCellRe; //reorder tCell by cell coloring
 extern fpkind ** res; //residual for ns equations
 extern fpkind ** resOrg; //store the original res for repeat computing
 extern fpkind ** resAVX; //residual for ns equations by AVX512

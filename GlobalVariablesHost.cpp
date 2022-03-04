@@ -31,6 +31,7 @@ int * cellNumberOfEachNode; //Topology information, cell number owned by a node
 int * node2CellPosition; 
 int * cell2Node; //Topology information, cell's nodes
 int * cell2NodeCount; //The cell-access frequency by a node, sorted by cell.
+int * cell2NodeCountIntRe; //int type is usded for cell loop AVX512 __m256i data, also with cell coloring order
 fpkind * cell2NodeCountRe; //The cell-access frequency by a node, sorted by cell.
 int * nodeNumberOfEachCell; //Topology information, node number owned by a cell
 int * nodeNumberOfEachCellRe; //Topology information, node number owned by a cell
@@ -85,6 +86,7 @@ fpkind ** dqdx;
 fpkind ** dqdy;
 fpkind ** dqdz;
 fpkind ** tCell; //temperature on cells
+fpkind ** tCellRe; //reorder tCell by cell coloring
 fpkind ** res; //residual for ns equations
 fpkind ** resOrg;
 fpkind ** resAVX; //residual by AVX512
@@ -1948,10 +1950,14 @@ void reorderCellVarsByNode(){
 	int nTotal = nTotalCell + nBoundFace;
 	//allocate memory for qNS
 	qNSRe = (fpkind **)malloc(sizeof(fpkind*)*nl);
-	qNSRe[0] = (fpkind *)malloc(sizeof(fpkind)*nl*nTotalCell);
+	qNSRe[0] = (fpkind *)malloc(sizeof(fpkind)*nl*nTotal);
 	for (int equationID = 1; equationID < nl; equationID++){
-		qNSRe[equationID] = &qNSRe[equationID-1][nTotalCell];
+		qNSRe[equationID] = &qNSRe[equationID-1][nTotal];
 	}
+	tCellRe = (fpkind **)malloc(sizeof(fpkind *) * nTemperature);
+	tCellRe[0] = (fpkind *)malloc(sizeof(fpkind) * nTemperature * nTotal);
+	int iTemp;
+	for (iTemp = 1; iTemp < nTemperature; iTemp ++) tCellRe[iTemp] = &tCellRe[iTemp-1][nTotal];
 	//reorder variables by cell coloring
 	for (int colorCellID = 0; colorCellID < nTotalCell; colorCellID++){
 		int cellIDOrg = CellNodeGroup[colorCellID];
@@ -1959,6 +1965,9 @@ void reorderCellVarsByNode(){
 		cell2NodePositionRe[colorCellID] = cell2NodePosition[cellIDOrg];
 		for (int equationID = 0; equationID < nEquation; equationID++){
 			qNSRe[equationID][colorCellID] = qNS[equationID][cellIDOrg];
+		}
+		for (int equationID = 0; equationID < nTemperature; equationID++){
+			tCellRe[equationID][colorCellID] = tCell[equationID][cellIDOrg];
 		}
 	}		
 
@@ -1972,4 +1981,8 @@ void reorderCellVarsByNode(){
 		cell2NodeCountRe[countID] = (fpkind)cell2NodeCount[countID];
 	}
 	
+	cell2NodeCountIntRe = (int *)malloc(numNodes * sizeof(int));
+	for (int countID = 0; countID < numNodes; countID++){
+		cell2NodeCountIntRe[countID] = cell2NodeCount[countID];
+	}
 }
