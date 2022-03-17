@@ -19,6 +19,7 @@ void resetRes(const int loopID){
 }
 void HostFaceLoopLoadFlux(const int localStart, const int localEnd, const int loopID){
 	if (loopID == 0) printf("HostFaceLoopLoadFlux\n");
+	if (loopID == 0) printf("nBoundFace = %d, localEnd = %d\n", nBoundFace, localEnd);
 	int nMid;
 	if (localEnd <= nBoundFace) nMid = localEnd; //all of faces on boundary
 	else {

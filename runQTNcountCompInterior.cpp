@@ -81,7 +81,7 @@ void runQTNcountCompInterior(){
 		
 	preProcessQTNcountCompInterior();
 	int loopID;
-	int loopNum = 1000;
+	int loopNum = 500;
 	for (loopID = 0; loopID < loopNum; loopID++){
 	//for (loopID = 0; loopID < 10; loopID++){
 		if ( loopID % (loopNum/10) == 0) printf("%.4f%%\n", (float)(loopID*100.0/loopNum));

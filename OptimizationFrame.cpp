@@ -13,7 +13,7 @@ int main(int argc, char ** argv){
 //	deviceControl();
 	runQTNcountCompInterior(); //Optimize GPUInteriorFaceNCountQNodeTNodeCal
 	//runCompGradientGGNodeFaceCal();//Optimize CompGradientGGNodeInteriorFaceCal
-//	runLoadFlux(); //Optimize LoadFlux
+	//runLoadFlux(); //Optimize LoadFlux
 	//runLocalMinMax(); //local max and min of qNS
 	outputTimers();
 	//free host and device variables

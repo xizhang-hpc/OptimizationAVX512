@@ -6,7 +6,7 @@
 void runLocalMinMax(){
 	preProcessLocalMinMax();
 	int loopID;
-	int loopNum = 1000;
+	int loopNum = 500;
 	for (loopID = 0; loopID < loopNum; loopID++){
 		HostFaceLoopLocalMinMax(loopID);
 		AVX512FaceLoopLocalMinMax(loopID);
