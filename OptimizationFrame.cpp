@@ -11,10 +11,15 @@ using namespace newTimer;
 int main(int argc, char ** argv){
 	printf("Hello, Optimization Platform\n");
 //	deviceControl();
-	runQTNcountCompInterior(); //Optimize GPUInteriorFaceNCountQNodeTNodeCal
-	//runCompGradientGGNodeFaceCal();//Optimize CompGradientGGNodeInteriorFaceCal
-	//runLoadFlux(); //Optimize LoadFlux
-	//runLocalMinMax(); //local max and min of qNS
+    #ifdef DATAINTERPOLATE
+        	runQTNcountCompInterior(); //Optimize GPUInteriorFaceNCountQNodeTNodeCal
+    #endif
+	#ifdef FLUXSUM
+		runLoadFlux(); //Optimize LoadFlux
+	#endif
+	#ifdef MAXMIN
+		runLocalMinMax(); //local max and min of qNS
+	#endif
 	outputTimers();
 	//free host and device variables
 	freeGlobalVariablesHost();
